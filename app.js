@@ -150,7 +150,7 @@ function buildIndex() {
     g._t = norm(g.title);
     g._alt = (g.altTitles || []).map(norm);
     g._people = [...(g.developers || []), ...(g.publishers || [])].map(norm);
-    g._misc = [...(g.genre || []), g.series || ''].filter(Boolean).map(norm);
+    g._misc = [...(g.genre || []), ...(g.series || [])].filter(Boolean).map(norm);
     g._contains = (g.contains || []).map(norm);
     /* Flattened twins, built once. Word-order-independent matching runs against
        these; the exact tiers still run against the originals. */
@@ -564,7 +564,14 @@ function renderDetail(id) {
     vals.forEach(v => w.appendChild(tagLink(key, v)));
     kv(dl2, label, w);
   });
-  if (g.series) { const w = el('span'); w.appendChild(tagLink('series', g.series)); kv(dl2, 'Series', w); }
+  /* Series is a LIST. A game can sit in more than one - Hyrule Warriors: Age
+     of Imprisonment belongs to both Hyrule Warriors and Breath of the Wild, and
+     rendering the raw cell made that one unclickable blob. */
+  if ((g.series || []).length) {
+    const w = el('span'); w.style.display = 'flex'; w.style.flexWrap = 'wrap'; w.style.gap = '6px';
+    g.series.forEach(v => w.appendChild(tagLink('series', v)));
+    kv(dl2, g.series.length > 1 ? 'Series' : 'Series', w);
+  }
   /* Switch folders live with the tags, per Justin. Still never a search facet
      and never merged into Genre - handoff 5 and 15. */
   if (g.shelf && g.shelf.length) {
