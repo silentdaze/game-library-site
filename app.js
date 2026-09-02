@@ -43,7 +43,7 @@ const STATUS_META = {
        re-reading `Abandoned` already needed. Never render it as a completion
        date. Handoff 9.13. */
     cls: 's', pill: g => 'Sampled' + (g.completed ? ' ' + g.completed : ''),
-    dateLabel: 'Played', notesLabel: 'What he played'
+    dateLabel: 'Played', notesLabel: 'What I played'
   },
   'In Progress': {
     /* `Completed` stays empty on an In Progress row by rule - handoff 4. */
@@ -277,7 +277,7 @@ function completionBanner() {
   const b = el('div', 'cbanner');
   const p1 = el('p');
   p1.appendChild(el('b', null,
-    `${c.beatenNeverOwned} of the ${c.beaten.toLocaleString()} completions are on games he has never owned`));
+    `${c.beatenNeverOwned} of my ${c.beaten.toLocaleString()} completions are on games I've never owned`));
   const by = (META.neverOwnedBy || []).map(d => `${d.count} ${d.label}`).join(', ');
   if (by) p1.append(` — ${by}.`);
   b.appendChild(p1);
@@ -290,7 +290,7 @@ function completionBanner() {
   if (extra.length) {
     const p2 = el('p', 'sub');
     p2.append('Also here: ' + extra.map(e => `${e.n} ${e.st.toLowerCase()}`).join(' and ') +
-      '. Both carry real play history. Sampled means a company anthology he dipped into that was never a completion unit — not a lesser Beaten.');
+      '. Both carry real play history. Sampled means a collection I dipped into that was never something to finish — not a lesser Beaten.');
     b.appendChild(p2);
   }
   return b;
@@ -434,9 +434,9 @@ function renderDetail(id) {
   const cov = el('div', 'cover-slot');
   if (META.covers) {
     const img = el('img'); img.alt = ''; img.src = 'covers/' + g.id + '.webp';
-    img.onerror = () => { img.remove(); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'phase 2')); };
+    img.onerror = () => { img.remove(); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
     cov.appendChild(img);
-  } else { cov.append('◻'); cov.appendChild(el('div', null, 'cover art')); cov.appendChild(el('div', null, 'phase 2')); }
+  } else { cov.append('◻'); cov.appendChild(el('div', null, 'cover art')); cov.appendChild(el('div', null, 'coming soon')); }
   head.appendChild(cov);
 
   const dt = el('div', 'dtitle');
@@ -460,7 +460,7 @@ function renderDetail(id) {
   view.appendChild(head);
 
   view.appendChild(el('div', 'desc-empty',
-    'No description yet. The workbook has none — confirmed across all 43 columns and 13 sheets. These arrive in phase 2 from Playnite.'));
+    'No description yet — descriptions and cover art are on the way.'));
 
   /* Ownership & access first - it is the main thing you want when you look a
      game up. Tags second. */
@@ -709,7 +709,7 @@ function renderHealth() {
     const n = el('div', 'hnames'); n.style.borderColor = 'var(--coral-line)';
     const t = el('p', 't');
     t.appendChild(el('b', null, 'These two contradict themselves'));
-    t.append(' — and they cancel out, which is why the totals still match the handoff. Not fixed here; the workbook is edited in the chat.');
+    t.append(' — and they cancel out, which is why the totals still balance. Corrected at the source, not on the site.');
     n.appendChild(t);
     const ul = el('ul');
     conflicts.forEach(g => { const li = el('li'); const a = el('a', null, g.title); a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li); });
