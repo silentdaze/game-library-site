@@ -133,6 +133,15 @@ function accessNote(g) {
 
 const norm = s => String(s).toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '');
 
+/* Punctuation flattened to spaces, so "Super Mario Bros. Wonder" and a typed
+   "mario bros wonder" can meet in the middle. Deliberately kept SEPARATE from
+   norm() rather than replacing it: norm() still backs the exact-title tier,
+   which is what keeps 'PICROSS S+' and 'Picross S' apart at the top of the
+   results even though flattening collapses them. Handoff 16. */
+const flat = s => norm(s).replace(/[^a-z0-9]+/g, ' ').trim();
+const words = s => flat(s).split(' ').filter(Boolean);
+const hasAll = (hay, toks) => toks.every(t => hay.includes(t));
+
 function buildIndex() {
   GAMES.forEach(g => {
     g._t = norm(g.title);
@@ -140,45 +149,103 @@ function buildIndex() {
     g._people = [...(g.developers || []), ...(g.publishers || [])].map(norm);
     g._misc = [...(g.genre || []), g.series || ''].filter(Boolean).map(norm);
     g._contains = (g.contains || []).map(norm);
+    /* Flattened twins, built once. Word-order-independent matching runs against
+       these; the exact tiers still run against the originals. */
+    g._tf = flat(g.title);
+    g._altf = g._alt.map(flat);
+    g._containsf = g._contains.map(flat);
+    g._peoplef = g._people.map(flat).join(' ');
+    g._miscf = g._misc.map(flat).join(' ');
+    g._allf = [g._tf, g._altf.join(' '), g._peoplef, g._miscf].join(' ');
   });
 }
 
 /* Ranked search over Title, Alt Titles, Developers, Publishers, Genre, Series
-   and Contains - handoff 3.4. A Contains hit is reported differently, because
-   "Golden Axe" is not a row in the library; it lives inside two SEGA
-   collections and the result has to say so. */
+   and Contains - handoff 3.4.
+
+   WORD ORDER DOES NOT MATTER. Typing "mario wonder" has to find
+   "Super Mario Bros. Wonder: Nintendo Switch 2 Edition + Meetup in Bellabel
+   Park", and before this it found nothing at all - the search was one
+   contiguous substring test, so any word between your two words killed the
+   match. Real searches that returned zero: "zelda breath", "kart mario",
+   "witcher wild", "hyrule zelda". With 4,361 games, a search that only works
+   when you already know the exact title is a search you cannot trust.
+
+   Contiguous phrase matches still outrank scattered words, so typing a title
+   properly still puts it first. Every token must be present - it is AND, not
+   OR - or one common word would drag in half the library.
+
+   A Contains hit is reported differently, because "Golden Axe" is not a row in
+   the library; it lives inside two SEGA collections and the result has to say
+   so. */
 function search(query) {
-  const q = norm(query.trim());
-  if (!q) return GAMES.map(g => ({ g, score: 0, inside: null }));
+  const raw = query.trim();
+  const q = norm(raw);         /* phrase, punctuation intact */
+  const qf = flat(raw);        /* phrase, punctuation flattened */
+  const toks = words(raw);     /* the individual words */
+  if (!qf) return GAMES.map(g => ({ g, score: 0, inside: null }));
   const out = [];
   for (const g of GAMES) {
     let score = 0, inside = null;
+
+    /* Title. Exact, then exact-ignoring-punctuation, then prefix, then
+       contiguous, then words-in-any-order.
+
+       The top two tiers are deliberately SEPARATE. Flattening collapses
+       'PICROSS S+' and 'Picross S' onto the same string, and those are two
+       different games four years apart, one of them Beaten - handoff 16 calls
+       the '+' load-bearing. Folding both into one 1000 tier made them tie, so
+       typing the exact title of either put them in an arbitrary order. Now the
+       true exact match wins outright and the other is still findable one tier
+       down, which is what you want from a search: ranked, not hidden. */
     if (g._t === q) score = 1000;
-    else if (g._t.startsWith(q)) score = 800;
-    else if (g._t.includes(q)) score = 600;
+    else if (g._tf === qf) score = 950;
+    else if (g._tf.startsWith(qf)) score = 900;
+    else if (g._tf.includes(qf)) score = 800;
+    else if (hasAll(g._tf, toks)) score = 700;
+
+    /* Alt titles, same shape one tier down. */
     if (!score) {
-      for (const a of g._alt) {
-        if (a === q) { score = 500; break; }
-        if (a.includes(q)) { score = 400; break; }
+      for (let i = 0; i < g._altf.length; i++) {
+        const a = g._altf[i];
+        if (a === qf) { score = 600; break; }
+        if (a.includes(qf)) { score = 500; break; }
+        if (hasAll(a, toks)) { score = 450; break; }
       }
     }
-    if (!score && g._people.some(p => p.includes(q))) score = 300;
-    if (!score && g._misc.some(m => m.includes(q))) score = 200;
+
+    if (!score && g._peoplef.includes(qf)) score = 300;
+    else if (!score && hasAll(g._peoplef, toks)) score = 250;
+    if (!score && g._miscf.includes(qf)) score = 200;
+    else if (!score && hasAll(g._miscf, toks)) score = 150;
+
+    /* Last resort: the words are all here, but spread across fields - "mario
+       nintendo" is the title plus the publisher. Ranked below everything so it
+       never displaces a real title match. */
+    if (!score && hasAll(g._allf, toks)) score = 120;
+
     /* Computed even when the row already matched on something else. Searching
        "Samurai Shodown" matches SAMURAI SHODOWN NEOGEO COLLECTION by title AND
        finds seven components inside it; the attribution is the useful half and
        used to be thrown away because the title matched first.
 
        The three components that are ALSO separately-owned standalone rows
-       (Samurai Shodown II, IV: Amakusa's Revenge, V Special) are two real
+       (Samurai Shodown II, IV: Amakusa\'s Revenge, V Special) are two real
        purchases each and both results are correct. The standalone row and the
        "found inside" result both appear. Do NOT deduplicate them - handoff
        9.10. */
-    const hits = (g.contains || []).filter((_, i) => g._contains[i].includes(q));
+    const hits = (g.contains || []).filter((_, i) =>
+      g._containsf[i].includes(qf) || hasAll(g._containsf[i], toks));
     if (hits.length) { inside = hits; if (!score) score = 100; }
+
     if (score) out.push({ g, score, inside });
   }
-  out.sort((a, b) => b.score - a.score || a.g.title.localeCompare(b.g.title));
+  /* Within a tier, the shorter title is the likelier target: "Mario Kart World"
+     should sit above "Mario Kart 8 Deluxe - Booster Course Pass". */
+  out.sort((a, b) =>
+    b.score - a.score ||
+    a.g.title.length - b.g.title.length ||
+    a.g.title.localeCompare(b.g.title));
   return out;
 }
 
