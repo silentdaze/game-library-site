@@ -4,6 +4,9 @@
 
 'use strict';
 
+/* Set by the publish step as `app.js?v=<hash>`; empty when served locally. */
+const ASSET_V = (document.currentScript && (document.currentScript.src.split('?v=')[1] || '')) || '';
+
 let DATA = null, META = null, GAMES = [];
 let RESULTS = [], RENDERED = 0;
 const PAGE = 60;
@@ -874,7 +877,16 @@ function route() {
 
 /* ---------------------------------------------------------------- boot */
 
-fetch('data/library.json')
+/* GitHub Pages serves everything with `cache-control: max-age=600` and no
+   revalidation, and index.html, app.js and library.json expire INDEPENDENTLY.
+   So for ten minutes after a publish a visitor can hold any mixture of old and
+   new - including new code against an old payload, which is a broken page
+   rather than merely a stale one.
+
+   The publish stamps a content hash onto this script's own URL, so reading it
+   back off `document.currentScript` ties the payload to exactly the code that
+   asked for it. No hash locally, where the query is absent and this is a no-op. */
+fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
   .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
   .then(d => {
     DATA = d; META = d.meta; GAMES = d.games;
