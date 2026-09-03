@@ -14,6 +14,10 @@
      abandoned rail, and Sampled is not a failure or a did-not-finish state -
      handoff 9.13. Gold reads as "dipped into", which is what it means. */
   --gold:#8a6413; --gold-soft:#fbf1dc; --gold-line:#ecd6a6;
+  /* Retired (v80). A calm slate, deliberately NOT coral: coral is Abandoned,
+     and Retired is not a failure - the game simply had no ending to reach.
+     Distinct from the lilac used for "not owned" so the two never read alike. */
+  --slate:#4a6076; --slate-soft:#eaeff4; --slate-line:#c4d2de;
 
   --r:12px; --r-sm:8px;
   --sh:0 1px 2px rgba(29,42,58,.05), 0 10px 24px -14px rgba(29,42,58,.22);
@@ -109,6 +113,7 @@ a{color:var(--blue)}
 .row.abandoned{border-left-color:var(--coral-line)}
 .row.progress{border-left-color:var(--blue-mid)}
 .row.sampled{border-left-color:var(--gold-line)}
+.row.retired{border-left-color:var(--slate-line)}
 /* A status the payload carries and this stylesheet has never heard of. It gets
    a visible rail rather than nothing, so a new value never renders as silently
    ordinary. */
@@ -125,7 +130,7 @@ a{color:var(--blue)}
 .meta em{font-style:normal; color:var(--ink-2)}
 .st{font-family:var(--mono); font-size:11px; letter-spacing:.03em; font-weight:500}
 .st.b{color:var(--mint)} .st.a{color:var(--coral)} .st.p{color:var(--blue)}
-.st.s{color:var(--gold)} .st.x{color:var(--lilac)}
+.st.s{color:var(--gold)} .st.r{color:var(--slate)} .st.x{color:var(--lilac)}
 .whisper{font-size:11.5px; color:var(--ink-4)}
 .flag{font-size:11.5px; color:var(--lilac); background:var(--lilac-soft); border:1px solid var(--lilac-line); border-radius:20px; padding:1px 9px}
 .flag.gap{color:var(--ink-3); background:var(--panel-3); border-color:var(--line-2)}
@@ -170,6 +175,7 @@ a{color:var(--blue)}
 .spill.a{background:var(--coral-soft); border-color:var(--coral-line); color:var(--coral)}
 .spill.p{background:var(--blue-soft); border-color:var(--blue-line); color:var(--blue)}
 .spill.s{background:var(--gold-soft); border-color:var(--gold-line); color:var(--gold)}
+.spill.r{background:var(--slate-soft); border-color:var(--slate-line); color:var(--slate)}
 .spill.x{background:var(--lilac-soft); border-color:var(--lilac-line); color:var(--lilac)}
 .spill.no{background:var(--lilac-soft); border-color:var(--lilac-line); color:var(--lilac)}
 .slug{font-family:var(--mono); font-size:10.5px; color:var(--ink-4); margin-top:12px}
@@ -203,6 +209,7 @@ a{color:var(--blue)}
 .notes p{margin:0; padding:9px 13px; background:var(--mint-soft); border-radius:var(--r-sm)}
 .notes.a p{background:var(--coral-soft)}
 .notes.s p{background:var(--gold-soft)}
+.notes.r p{background:var(--slate-soft)}
 .notes.p p{background:var(--blue-soft)}
 .notes.x p{background:var(--panel-3)}
 

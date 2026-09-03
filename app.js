@@ -53,17 +53,33 @@ const STATUS_META = {
     cls: 'p', pill: () => 'In progress',
     dateLabel: 'Completed', notesLabel: 'Progress so far'
   },
+  'Retired': {
+    /* v80. A game with NO END STATE that he stopped playing - Rocket League,
+       Fortnite, Knockout City. The distinction from Abandoned is the whole
+       reason both exist, and it is about the GAME, not about him:
+
+           Abandoned   the game HAS an ending, he stopped before reaching it
+           Retired     the game has NO ending, there was never anything to reach
+
+       So this is not a failure state and must never be styled like one. It gets
+       the calm slate below, not the coral that means Abandoned. Length is not
+       the test either - four of the nine run under five hours. Handoff 9.22. */
+    cls: 'r', pill: g => 'Retired' + (g.completed ? ' ' + g.completed : ''),
+    dateLabel: 'Put down', notesLabel: 'How far it went'
+  },
   'Abandoned': {
     /* On an Abandoned row, `Completed` records when he STOPPED, not when he
-       finished - true on all 10, each with a note explaining. Never render it
+       finished - true on all 11, each with a note explaining. Never render it
        as a completion. See archive/RETURN_TO_CHAT_session2_APPLIED.md item 6. */
     cls: 'a', pill: g => 'Abandoned' + (g.completed ? ' ' + g.completed : ''),
     dateLabel: 'Stopped', notesLabel: 'Why it was put down'
   }
 };
 
-/* `Completed` now carries three meanings - finished, stopped, played - so the
-   label always comes from here and is never assumed. Handoff 9.13. */
+/* `Completed` now carries FOUR meanings - finished (Beaten), stopped
+   (Abandoned), played (Sampled), put down (Retired) - so the label always comes
+   from here and is never assumed. A validator asserting "Completed implies
+   finished" would falsely flag 22 rows. Handoff 9.22. */
 function statusMeta(g) {
   if (!g.status || g.status === 'Unplayed') return null;
   return STATUS_META[g.status] || {
@@ -295,6 +311,16 @@ function sortResults(list) {
 
 const completionStatuses = () => (META.completionStatuses || ['Beaten']);
 
+/* One sentence per status that is in the completion view but is not `Beaten`,
+   because a reader seeing 513 completions against a header of 499 deserves to
+   know what the other 14 are. Both glosses lead with what the GAME was, not
+   with what I failed to do - neither is a shortfall. */
+const STATUS_GLOSS = {
+  'Sampled': 'means a collection I dipped into that was never something to finish.',
+  'Retired': 'means a game with no ending to reach — I stopped, but there was never a finish line.',
+  'In Progress': 'means a collection I am partway through.'
+};
+
 function passes(g) {
   if (state.platform && !(g.platformGroups || []).includes(state.platform)) return false;
   if (state.store && !(g.stores || []).includes(state.store)) return false;
@@ -358,9 +384,25 @@ function completionBanner() {
     .map(st => { const d = (META.statuses || []).find(x => x.value === st); return d && d.count ? { st, n: d.count } : null; })
     .filter(Boolean);
   if (extra.length) {
+    /* Built from whatever the payload says is in this view, because the list
+       grows: it was Sampled and In Progress at v74, and Retired joined at v80.
+       "Both carry real play history" was already wrong the moment a third
+       arrived, which is what hardcoded prose about a derived list always does.
+       The gloss for each status comes from the same map, so a seventh needs a
+       sentence here and nothing else. */
     const p2 = el('p', 'sub');
-    p2.append('Also here: ' + extra.map(e => `${e.n} ${e.st.toLowerCase()}`).join(' and ') +
-      '. Both carry real play history. Sampled means a collection I dipped into that was never something to finish — not a lesser Beaten.');
+    const list = extra.map(e => `${e.n} ${e.st.toLowerCase()}`);
+    const phrase = list.length > 1
+      ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]
+      : list[0];
+    p2.append(`Also here: ${phrase} — all of them real play history.`);
+    extra.forEach(e => {
+      const gloss = STATUS_GLOSS[e.st];
+      if (!gloss) return;
+      p2.append(' ');
+      p2.appendChild(el('b', null, e.st));
+      p2.append(' ' + gloss);
+    });
     b.appendChild(p2);
   }
   return b;
@@ -383,7 +425,7 @@ function renderCount() {
 
 /* Keyed off the status class, not the status name, so an unmapped status gets
    the neutral rail rather than `undefined`. */
-const ROW_CLASS = { b: 'beaten', a: 'abandoned', p: 'progress', s: 'sampled', x: 'other' };
+const ROW_CLASS = { b: 'beaten', a: 'abandoned', p: 'progress', s: 'sampled', r: 'retired', x: 'other' };
 
 function rowNode(r) {
   const g = r.g;
