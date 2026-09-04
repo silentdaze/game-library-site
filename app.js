@@ -588,6 +588,32 @@ function renderDetail(id) {
     g.stores.forEach(s => { const a = el('a', 'tagl', s); a.href = '#/?store=' + encodeURIComponent(s); wrapper.appendChild(a); });
     kv(dl1, 'Stores', wrapper);
   }
+  /* Complete Edition On - workbook column 43, added at v94 for exactly one
+     question: Justin owns Alice: Madness Returns on four stores and cannot tell
+     which store's copy is the Complete Collection without opening each launcher.
+     `Stores` says he owns it somewhere; it never says what that store's copy IS.
+
+     So this sits directly under Stores, styled to be read at a glance rather
+     than hunted for - answering the question is the whole point of the column.
+
+     EMPTY IS THE NORMAL CASE (4,311 of 4,338 rows) and is NOT a data gap: it
+     only means anything where a game's copies genuinely differ. Nothing here
+     renders a placeholder, a "needs filling" prompt or a missing-data flag, and
+     it is deliberately absent from the health view. */
+  if (g.completeEditionOn && g.completeEditionOn.length) {
+    const w = el('span', 'cedition');
+    w.appendChild(el('span', 'ce-tick', '\u2605'));
+    const lbl = el('span', 'ce-txt');
+    lbl.append('Complete edition on ');
+    g.completeEditionOn.forEach((sname, i) => {
+      if (i) lbl.append(g.completeEditionOn.length > 2 && i < g.completeEditionOn.length - 1 ? ', ' : ' and ');
+      const a = el('a', 'ce-store', sname);
+      a.href = '#/?store=' + encodeURIComponent(sname);
+      lbl.appendChild(a);
+    });
+    w.appendChild(lbl);
+    kv(dl1, 'Complete edition', w);
+  }
   if (g.ownership && g.ownership.length) kv(dl1, 'Ownership', el('span', 'plain', g.ownership.join(' · ')));
   if (g.playedOn && g.playedOn.length) kv(dl1, 'Played on', el('span', 'plain mono', g.playedOn.join(' · ')));
   /* Finished / stopped / played - three meanings, so the label is looked up,
