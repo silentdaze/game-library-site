@@ -528,6 +528,11 @@ function renderDetail(id) {
   $('#health').hidden = true;
   $('#sentinel').hidden = true;
   if (!g) {
+    /* Reachable for real now: `syndicate` was merged away at v120, so any
+       old link or bookmark to a retired Site ID lands here. Reset the title
+       too - renderDetail sets it only on the found path, so without this the
+       tab keeps the previously-viewed game's name on a dead link. */
+    document.title = 'Game Library';
     const e = el('div', 'empty');
     e.appendChild(el('b', null, 'No such game'));
     const back = el('a', null, '← Back to the library'); back.href = '#/';
