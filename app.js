@@ -363,6 +363,10 @@ const completionStatuses = () => (META.completionStatuses || ['Beaten']);
    know what the other 14 are. Both glosses lead with what the GAME was, not
    with what I failed to do - neither is a shortfall. */
 const STATUS_GLOSS = {
+  /* `Abandoned` earns a gloss now that the view is called Played rather than
+     Completions: it belongs in the list, and the sentence has to say why it is
+     not a completion without calling it a failure. */
+  'Abandoned': 'means a game that did have an ending, and I stopped before reaching it.',
   'Sampled': 'means a collection I dipped into that was never something to finish.',
   'Retired': 'means a game with no ending to reach — I stopped, but there was never a finish line.',
   'In Progress': 'means a collection I am partway through.'
@@ -401,9 +405,16 @@ function passes(g) {
     if (state[key] && !(g[key] || []).includes(state[key])) return false;
   }
   if (state.hideShovelware && (g.shovelware || []).length) return false;
-  /* Beaten plus the two statuses that also carry real play history - the list
-     comes from the payload, not from here. Handoff 3.3. */
-  if (state.view === 'completions' && !completionStatuses().includes(g.status)) return false;
+  /* The Played view is every game with ANY status other than `Unplayed`.
+     Derived, never a list of the statuses that happen to exist today - a
+     seventh value joins it on its own, which is the whole lesson of the
+     `Summary` sheet's missing `In Progress` COUNTIF (handoff 7, 3.3b).
+
+     It was called Completions and excluded `Abandoned`, which was right for
+     that name and wrong for this one: an abandoned game WAS played. Justin's
+     call, 2026-09-05. `Abandoned` keeps its own coral styling here - it sits
+     in the list without being dressed up as a completion. */
+  if (state.view === 'played' && (!g.status || g.status === 'Unplayed')) return false;
   if (state.flag && !(g.flags || []).includes(state.flag)) return false;
   return true;
 }
@@ -415,7 +426,6 @@ function compute() {
   RENDERED = 0;
   $('#view').replaceChildren();
   renderCount();
-  if (state.view === 'completions') $('#view').appendChild(completionBanner());
   renderMore();
 }
 
@@ -424,8 +434,12 @@ function compute() {
    payload - handoff 7's rule is derive, don't string-replace, and it applies to
    prose as much as to formulas. This exact sentence has already drifted once
    (58 of 504 survived into three places in the v71 handoff after the real
-   figure moved), so it is computed here and written down nowhere. */
-function completionBanner() {
+   figure moved), so it is computed here and written down nowhere.
+
+   It used to sit on top of the Completions list. It lives on the Stats page
+   now - Justin's call - because it is a fact ABOUT the collection, not a
+   caption the list needed every time he opened it. */
+function playedFacts() {
   const c = META.counts;
   const b = el('div', 'cbanner');
   const p1 = el('p');
@@ -435,18 +449,17 @@ function completionBanner() {
   if (by) p1.append(` — ${by}.`);
   b.appendChild(p1);
 
-  /* Say why the view holds more rows than the Beaten count, rather than
-     letting the two numbers look like a bug. */
-  const extra = completionStatuses().filter(st => st !== 'Beaten')
-    .map(st => { const d = (META.statuses || []).find(x => x.value === st); return d && d.count ? { st, n: d.count } : null; })
-    .filter(Boolean);
+  /* Say why the Played view holds more rows than the Beaten count, rather than
+     letting the two numbers look like a bug.
+
+     Built from META.statuses - every status the workbook actually carries,
+     minus Beaten and Unplayed - so it needs no list of its own. That is what
+     let `Abandoned` join the view without touching this function: it was
+     already being computed, it had simply been filtered out upstream. */
+  const extra = (META.statuses || [])
+    .filter(d => d.value !== 'Beaten' && d.value !== 'Unplayed' && d.count)
+    .map(d => ({ st: d.value, n: d.count }));
   if (extra.length) {
-    /* Built from whatever the payload says is in this view, because the list
-       grows: it was Sampled and In Progress at v74, and Retired joined at v80.
-       "Both carry real play history" was already wrong the moment a third
-       arrived, which is what hardcoded prose about a derived list always does.
-       The gloss for each status comes from the same map, so a seventh needs a
-       sentence here and nothing else. */
     const p2 = el('p', 'sub');
     const list = extra.map(e => `${e.n} ${e.st.toLowerCase()}`);
     const phrase = list.length > 1
@@ -470,7 +483,7 @@ function completionBanner() {
 function renderCount() {
   const n = RESULTS.length;
   const bits = [];
-  if (state.view === 'completions') bits.push('completions');
+  if (state.view === 'played') bits.push('played');
   /* Every active tag filter is named here, not just genre. The count line is
      the one place that always says why the list is the length it is. */
   TAG_AXES.forEach(([k]) => {
@@ -587,7 +600,7 @@ function renderDetail(id) {
   state.mode = 'detail';
   view.replaceChildren();
   $('#browse').hidden = true;
-  $('#health').hidden = true;
+  $('#stats').hidden = true;
   $('#sentinel').hidden = true;
   if (!g) {
     /* Reachable for real now: `syndicate` was merged away at v120, so any
@@ -933,14 +946,177 @@ function updateSortLabel() {
 
 /* ---------------------------------------------------------------- health */
 
-function renderHealth() {
-  const h = $('#health');
+/* ---------------------------------------------------------------- stats */
+
+/* A ranked bar list: one measure, one hue, sorted. The form comes first and
+   magnitude-by-category is a bar chart - never a pie, never a second axis.
+   Because there is exactly ONE series there is no categorical palette to get
+   wrong and no legend to need; the row label carries identity.
+
+   Values are direct-labelled on every row on purpose. That is normally wrong on
+   a dense plot, but this is a short ranked table with a magnitude cue, and the
+   number is the thing being compared. Text stays in ink tokens - never the
+   series colour. */
+function barList(rows, opts) {
+  const o = opts || {};
+  const max = Math.max(...rows.map(r => r.n), 1);
+  const box = el('div', 'bars');
+  rows.forEach(r => {
+    const line = r.href ? el('a', 'bar') : el('div', 'bar');
+    if (r.href) line.href = r.href;
+    line.title = `${r.label} — ${r.n.toLocaleString()} ${o.unit || 'games'}`;
+    line.appendChild(el('span', 'bl', r.label));
+    const track = el('span', 'bt');
+    const fill = el('span', 'bf');
+    /* Width is the value's share of the largest bar, so the baseline is a true
+       zero and lengths are comparable. A minimum keeps a 1-row category from
+       rendering as an invisible sliver. */
+    fill.style.width = Math.max(2, (r.n / max) * 100) + '%';
+    if (r.cls) fill.classList.add(r.cls);
+    track.appendChild(fill);
+    line.appendChild(track);
+    line.appendChild(el('span', 'bv', r.n.toLocaleString()));
+    box.appendChild(line);
+  });
+  return box;
+}
+
+function statPanel(title, note, body) {
+  const d = el('div', 'spanel');
+  d.appendChild(el('h3', null, title));
+  if (note) d.appendChild(el('p', 'pnote', note));
+  d.appendChild(body);
+  return d;
+}
+
+/* Completions per year, off the `Completed` quarter on every played row.
+
+   Change-over-time, so it is columns rather than a ranked list. One series, so
+   no legend. Only the peak is direct-laballed - a number over every column is
+   the classic way to make a small chart unreadable; the rest are on hover. */
+function completionsByYear() {
+  const byYear = new Map();
+  GAMES.forEach(g => {
+    if (!g.status || g.status === 'Unplayed' || !g.completed) return;
+    const m = /(\d{4})/.exec(g.completed);
+    if (!m) return;
+    byYear.set(m[1], (byYear.get(m[1]) || 0) + 1);
+  });
+  if (!byYear.size) return null;
+  const years = [...byYear.keys()].sort();
+  const from = +years[0], to = +years[years.length - 1];
+  const max = Math.max(...byYear.values());
+  const wrap = el('div', 'cols');
+  for (let y = from; y <= to; y++) {
+    const n = byYear.get(String(y)) || 0;
+    const c = el('div', 'col');
+    c.title = `${y} — ${n} ${n === 1 ? 'game' : 'games'}`;
+    const barwrap = el('div', 'colbar');
+    const f = el('div', 'colf');
+    f.style.height = n ? Math.max(3, (n / max) * 100) + '%' : '0';
+    if (n === max) { f.classList.add('peak'); barwrap.appendChild(el('span', 'colv', String(n))); }
+    barwrap.appendChild(f);
+    c.appendChild(barwrap);
+    /* Every fifth year and the endpoints, so the axis never collides with
+       itself on a narrow screen. */
+    c.appendChild(el('span', 'coly', (y % 5 === 0 || y === from || y === to) ? String(y) : ''));
+    wrap.appendChild(c);
+  }
+  return wrap;
+}
+
+function renderStats() {
+  const h = $('#stats');
   h.replaceChildren();
   const c = META.counts;
+  const fx = META.facets;
   const sheet = el('div', 'sheet');
-  sheet.appendChild(el('h2', null, 'Library health'));
-  sheet.appendChild(el('p', 'sub', 'Every number is a filter. Click one to drop into the library with it applied.'));
+  sheet.appendChild(el('h2', null, 'Stats'));
+  sheet.appendChild(el('p', 'sub',
+    'Everything here is counted from the workbook at build time. Most of it is a filter — click through to the library with it applied.'));
 
+  /* ---- headline tiles. A hero number is not a chart; four of them are not a
+     chart either. Bar charts start below. ---- */
+  const tiles = el('div', 'stiles');
+  const tile = (n, label, sub, href) => {
+    if (n == null) return;
+    const b = href ? el('a', 'stile') : el('div', 'stile');
+    if (href) b.href = href;
+    b.appendChild(el('b', null, n.toLocaleString()));
+    b.appendChild(el('span', 'sl', label));
+    if (sub) b.appendChild(el('span', 'ss', sub));
+    tiles.appendChild(b);
+  };
+  const pct = n => Math.round((n / c.logged) * 100) + '%';
+  tile(c.logged, 'Logged', 'every row in the library');
+  tile(c.owned, 'Owned', pct(c.owned) + ' of the library', '#/');
+  tile(c.played, 'Played', pct(c.played) + ' of the library', '#/played');
+  tile(c.beaten, 'Beaten', c.beatenNeverOwned + ' never owned', '#/?status=Beaten');
+  tile(c.logged - c.untagged - c.unverified, 'Tagged',
+       pct(c.logged - c.untagged - c.unverified) + ' have a genre');
+  sheet.appendChild(tiles);
+
+  sheet.appendChild(playedFacts());
+
+  const yr = completionsByYear();
+  if (yr) sheet.appendChild(statPanel('Games finished each year',
+    'Counted off the quarter recorded against every played game. Hover a column for its year.', yr));
+
+  /* ---- ranked lists, two to a row on a wide screen ---- */
+  const pair = () => { const d = el('div', 'spair'); sheet.appendChild(d); return d; };
+  const top = (arr, n) => (arr || []).slice(0, n);
+
+  const r1 = pair();
+  if (fx.genre && fx.genre.length) {
+    r1.appendChild(statPanel('Most common genres', `${fx.genre.length} genres in use.`,
+      barList(top(fx.genre, 10).map(f =>
+        ({ label: f.value, n: f.count, href: '#/?genre=' + encodeURIComponent(f.value) })))));
+  }
+  if (fx.series && fx.series.length) {
+    r1.appendChild(statPanel('Biggest series',
+      `${fx.series.length} series across ${GAMES.filter(g => (g.series || []).length).length.toLocaleString()} games.`,
+      barList(top(fx.series, 10).map(f =>
+        ({ label: f.value, n: f.count, href: '#/?series=' + encodeURIComponent(f.value) })))));
+  }
+
+  /* Developers are not a facet in the payload - they are a search term - so the
+     tally is built here from the games themselves. */
+  const devs = new Map();
+  GAMES.forEach(g => (g.developers || []).forEach(d => devs.set(d, (devs.get(d) || 0) + 1)));
+  const devTop = [...devs.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+
+  const r2 = pair();
+  if (devTop.length) {
+    r2.appendChild(statPanel('Studios I own the most from',
+      `${devs.size.toLocaleString()} developers named across the library.`,
+      barList(devTop.slice(0, 10).map(([name, n]) =>
+        ({ label: name, n, href: '#/?q=' + encodeURIComponent(name) })))));
+  }
+  if (fx.platform && fx.platform.length) {
+    r2.appendChild(statPanel('Where the library lives', 'By platform group.',
+      barList(top(fx.platform, 8).map(f =>
+        ({ label: f.value, n: f.count, href: '#/?platform=' + encodeURIComponent(f.value) })))));
+  }
+
+  const r3 = pair();
+  if (fx.length && fx.length.length) {
+    /* Already ordered shortest-to-longest by the export, on a key derived from
+       the value - so this one is NOT re-sorted by size. Duration order is the
+       information. */
+    r3.appendChild(statPanel('How long the games are', 'Shortest first, not biggest first.',
+      barList(fx.length.map(f =>
+        ({ label: f.value, n: f.count, href: '#/?length=' + encodeURIComponent(f.value) })))));
+  }
+  if (fx.store && fx.store.length) {
+    r3.appendChild(statPanel('Stores', `${fx.store.length} of them.`,
+      barList(top(fx.store, 8).map(f =>
+        ({ label: f.value, n: f.count, href: '#/?store=' + encodeURIComponent(f.value) })))));
+  }
+
+  /* ---- library health, unchanged in substance ---- */
+  const hsec = el('div', 'spanel');
+  hsec.appendChild(el('h3', null, 'Library health'));
+  hsec.appendChild(el('p', 'pnote', 'Open data gaps. Every one is a filter.'));
   const grid = el('div', 'hgrid');
   /* A gap that no longer exists is not worth a card. Both ownership
      contradictions and all six missing Switch folders were fixed in the chat at
@@ -950,18 +1126,23 @@ function renderHealth() {
     const b = el('button', 'hcard' + (alert ? ' alert' : ''));
     b.appendChild(el('b', null, n.toLocaleString()));
     b.appendChild(el('span', null, label));
-    b.onclick = () => { state.flag = flag; state.view = 'library'; h.hidden = true; $('#gear').classList.remove('on'); $('#browse').hidden = false; sync(); };
+    b.onclick = () => { state.flag = flag; state.view = 'library'; closeStats(); sync(); };
     grid.appendChild(b);
   };
   card(c.ownershipConflict, 'Ownership contradictions', 'ownership-conflict', true);
   card(c.untagged, 'Untagged', 'untagged');
   card(c.unverified, 'Marked Unverified', 'unverified');
-  card(c.notOwned, 'Played, never owned', 'not-owned');
+  /* Labelled "Played, never owned" until 2026-09-05, and that was wrong: the
+     `not-owned` flag is every row without an owning token - 96 of them - and
+     only 57 have been played (all Beaten). The other 39 are never-owned and
+     never-played, mostly subscription titles. The interesting figure, 57, is on
+     the Beaten tile above where it is actually true. */
+  card(c.notOwned, 'Not owned', 'not-owned');
   card(c.needsResub, 'Need a resubscribe', 'needs-resub');
   card(c.noShelf, 'Switch games with no shelf', 'no-shelf');
-  sheet.appendChild(grid);
+  hsec.appendChild(grid);
   if (!grid.childNodes.length) {
-    sheet.appendChild(el('p', 'sub', 'No open data gaps. Every flag this panel tracks is currently clear.'));
+    hsec.appendChild(el('p', 'pnote', 'No open data gaps. Every flag this panel tracks is currently clear.'));
   }
 
   const conflicts = GAMES.filter(g => (g.flags || []).includes('ownership-conflict'));
@@ -974,7 +1155,7 @@ function renderHealth() {
     const ul = el('ul');
     conflicts.forEach(g => { const li = el('li'); const a = el('a', null, g.title); a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li); });
     n.appendChild(ul);
-    sheet.appendChild(n);
+    hsec.appendChild(n);
   }
 
   const noShelf = GAMES.filter(g => (g.flags || []).includes('no-shelf'));
@@ -987,14 +1168,25 @@ function renderHealth() {
     const ul = el('ul');
     noShelf.forEach(g => { const li = el('li'); const a = el('a', null, g.title); a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li); });
     n.appendChild(ul);
-    sheet.appendChild(n);
+    hsec.appendChild(n);
   }
-
+  sheet.appendChild(hsec);
 
   sheet.appendChild(el('p', 'foot-note',
     `${META.source} · ${META.version} · generated ${META.generated} · ` +
     `${c.logged.toLocaleString()} games, ${c.blankRowsSkipped} blank rows skipped`));
   h.appendChild(sheet);
+}
+
+/* Every exit from the stats page goes through here, so the button state, the
+   panel and the browse bar can never disagree with each other. */
+function closeStats() {
+  $('#stats').hidden = true;
+  $('#stats').replaceChildren();
+  $('#statsbtn').classList.remove('on');
+  $('#statsbtn').setAttribute('aria-expanded', 'false');
+  $('#browse').hidden = false;
+  $('#sentinel').hidden = false;
 }
 
 /* ---------------------------------------------------------------- routing */
@@ -1019,7 +1211,7 @@ function writeUrl() {
   LINK_FILTERS.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.sort !== 'title' || state.dir !== 'asc') p.set('sort', state.sort + ':' + state.dir);
   if (state.hideShovelware) p.set('hide', 'shovelware');
-  const base = state.view === 'completions' ? '#/completions' : '#/';
+  const base = state.view === 'played' ? '#/played' : '#/';
   const next = base + (p.toString() ? '?' + p : '');
   if (next !== location.hash) {
     writing = true;
@@ -1032,6 +1224,11 @@ function route() {
   const hash = location.hash.replace(/^#/, '') || '/';
   const [path, qs] = hash.split('?');
   const params = new URLSearchParams(qs || '');
+
+  /* Every number on the Stats page is a link into the library, so leaving it by
+     clicking one is the normal path, not an edge case. Closing here covers all
+     of them at once - and the detail route below, which hides it separately. */
+  if (!$('#stats').hidden) closeStats();
 
   if (path.startsWith('/game/')) { renderDetail(path.slice(6)); return; }
 
@@ -1046,9 +1243,11 @@ function route() {
   if (cameFromDetail) window.scrollTo(0, 0);
   $('#browse').hidden = false;
   $('#sentinel').hidden = false;
-  state.view = path === '/completions' ? 'completions' : 'library';
+  /* `/completions` still resolves. It was the tab's name until 2026-09-05 and
+     the site is public, so old links and bookmarks must not break. */
+  state.view = (path === '/played' || path === '/completions') ? 'played' : 'library';
   $('#tab-library').classList.toggle('on', state.view === 'library');
-  $('#tab-completions').classList.toggle('on', state.view === 'completions');
+  $('#tab-played').classList.toggle('on', state.view === 'played');
 
   /* The URL fully describes the view. Reset every filter first, then apply
      only what the params say - otherwise filters accumulate across hash
@@ -1089,7 +1288,10 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
     DATA = d; META = d.meta; GAMES = d.games;
     buildIndex();
     const c = META.counts;
-    $('#wm-sub').textContent = `${c.logged.toLocaleString()} games · ${META.version}`;
+    /* The games count moved out of the wordmark and into its own `Logged`
+       pill - it was the same number printed twice. Justin's call. */
+    $('#wm-sub').textContent = META.version;
+    $('#c-logged').textContent = c.logged.toLocaleString();
     $('#c-owned').textContent = c.owned.toLocaleString();
     $('#c-beaten').textContent = c.beaten.toLocaleString();
 
@@ -1119,11 +1321,36 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (e.key === 'Escape') { $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false'); }
     });
 
-    $('#gear').onclick = () => {
-      const h = $('#health');
-      h.hidden = !h.hidden;
-      $('#gear').classList.toggle('on', !h.hidden);
-      if (!h.hidden) renderHealth();
+    /* Stats opens over the library. It is a page, not a settings tray, which is
+       why the browse bar goes away while it is up rather than sitting above it
+       filtering a list nobody can see. */
+    $('#statsbtn').onclick = () => {
+      const h = $('#stats');
+      if (!h.hidden) { closeStats(); sync(); return; }
+
+      const open = () => {
+        renderStats();
+        h.hidden = false;
+        $('#browse').hidden = true;
+        $('#view').replaceChildren();
+        $('#sentinel').hidden = true;
+        $('#statsbtn').classList.add('on');
+        $('#statsbtn').setAttribute('aria-expanded', 'true');
+        window.scrollTo(0, 0);
+      };
+
+      if (state.mode === 'detail') {
+        /* Leave the game page first, and open only once that navigation has
+           landed. Setting the hash routes ASYNCHRONOUSLY, and route() closes the
+           stats page - so opening first meant our own navigation immediately
+           undid it. The listener is registered before the hash is set and runs
+           after the app's own hashchange handler, which is what orders these
+           two correctly. */
+        window.addEventListener('hashchange', open, { once: true });
+        location.hash = '#/';
+      } else {
+        open();
+      }
     };
 
     new IntersectionObserver(es => {
