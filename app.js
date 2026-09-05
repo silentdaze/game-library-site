@@ -87,13 +87,60 @@ function statusMeta(g) {
   };
 }
 
+/* Every tag axis the payload carries a facet for, in the order they are shown
+   on a game page and in the filter panel.
+
+   ONE list drives all five of: the links on a game page, the filter controls,
+   passes(), the URL, and Clear filters. A tenth axis is an entry here and no
+   other code - which is the same reason meta.statuses is tallied off the
+   workbook rather than listed (handoff 3.3b). The keys are both the game-object
+   key AND the facet key AND the URL parameter name; keeping them identical is
+   what lets everything below be a loop.
+
+   `shelf` is deliberately NOT here. Switch folders are never a search facet -
+   handoff 5 and 15. They stay link-only, reachable from a game page. */
+const TAG_AXES = [
+  ['genre', 'Genre'], ['structure', 'Structure'], ['perspective', 'Perspective'],
+  ['players', 'Players'], ['length', 'Length'], ['demand', 'Demand'],
+  ['mood', 'Mood'], ['artSound', 'Art & Sound'], ['setting', 'Setting']
+];
+
+/* Genre earns its place in the always-visible row; the other eight live behind
+   "More filters" so the page opens uncluttered. Justin's call. */
+const PRIMARY_AXES = ['genre'];
+const EXTRA_AXES = TAG_AXES.filter(([k]) => !PRIMARY_AXES.includes(k));
+
+/* Filters that are real, but are reached only by clicking a link on a game page
+   - never a dropdown. `shelf` because Switch folders must never be a search
+   facet (handoff 5, 15); `series` because 657 values is not a dropdown, and it
+   is a relationship rather than a description of a game. */
+const LINK_FILTERS = [['shelf', 'shelf'], ['series', 'series']];
+
 const state = {
-  q: '', platform: '', store: '', category: '', genre: '', status: '',
+  q: '', platform: '', store: '', category: '', status: '',
+  flag: '', shelf: '', series: '',
   view: 'library', hideShovelware: false, sort: 'title', dir: 'asc',
   /* 'list' or 'detail'. The infinite-scroll observer must only ever append
      rows while a list is on screen. */
   mode: 'list'
 };
+/* One state key per axis, so `state.genre`, `state.mood` and the rest all exist
+   before anything reads them. Declared rather than sprung into being by the
+   router, which is how `flag` and `shelf` used to work. */
+TAG_AXES.forEach(([k]) => { state[k] = ''; });
+
+/* Whether the extra-filter panel is open. Remembered per browser as a pure
+   convenience - never as state the page depends on, and every access is
+   guarded because a private window or blocked site data makes it throw. */
+const PANEL_KEY = 'gl.filters.open';
+function panelPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(PANEL_KEY) === '1';
+    localStorage.setItem(PANEL_KEY, v ? '1' : '0');
+  } catch (e) { /* no storage: the panel just opens closed each visit */ }
+  return v;
+}
+let panelOpen = panelPref();
 
 const SORTS = {
   title:     { label: 'A\u2013Z',    rev: 'Z\u2013A',   name: 'Alphabetical' },
@@ -329,9 +376,15 @@ function passes(g) {
     const cats = (g.categories || {})[key] || [];
     if (!cats.includes(state.category)) return false;
   }
-  if (state.genre) {
-    if (state.genre === '__untagged') { if (!(g.flags || []).includes('untagged')) return false; }
-    else if (!(g.genre || []).includes(state.genre)) return false;
+  /* One pass over TAG_AXES rather than nine copies of the same three lines.
+     `__untagged` is genre's own sentinel - it is a hole in the data, not a
+     value in the vocabulary, which is why it cannot just be another option. */
+  for (const [key] of TAG_AXES) {
+    const want = state[key];
+    if (!want) continue;
+    if (key === 'genre' && want === '__untagged') {
+      if (!(g.flags || []).includes('untagged')) return false;
+    } else if (!(g[key] || []).includes(want)) return false;
   }
   if (state.status) {
     const s = state.status;
@@ -342,7 +395,11 @@ function passes(g) {
     else if (s === 'backlog') { if (!g.backlog) return false; }
     else if (g.status !== s) return false;
   }
-  if (state.shelf && !(g.shelf || []).includes(state.shelf)) return false;
+  /* Link-only filters. `series` used to fall through to a text search; it is a
+     real filter now, and the only reason it has no dropdown is its size. */
+  for (const [key] of LINK_FILTERS) {
+    if (state[key] && !(g[key] || []).includes(state[key])) return false;
+  }
   if (state.hideShovelware && (g.shovelware || []).length) return false;
   /* Beaten plus the two statuses that also carry real play history - the list
      comes from the payload, not from here. Handoff 3.3. */
@@ -414,9 +471,14 @@ function renderCount() {
   const n = RESULTS.length;
   const bits = [];
   if (state.view === 'completions') bits.push('completions');
-  if (state.genre) bits.push(state.genre === '__untagged' ? 'untagged' : state.genre);
+  /* Every active tag filter is named here, not just genre. The count line is
+     the one place that always says why the list is the length it is. */
+  TAG_AXES.forEach(([k]) => {
+    if (state[k]) bits.push(k === 'genre' && state[k] === '__untagged' ? 'untagged' : state[k]);
+  });
   if (state.store) bits.push(state.store);
   if (state.platform) bits.push(state.platform);
+  LINK_FILTERS.forEach(([k]) => { if (state[k]) bits.push(state[k]); });
   if (state.flag) bits.push(state.flag.replace(/-/g, ' '));
   const label = bits.length ? ' · ' + bits.join(' · ') : '';
   $('#resultcount').innerHTML = `<b>${n.toLocaleString()}</b> game${n === 1 ? '' : 's'}${label}` +
@@ -506,16 +568,16 @@ const REL = [
   ['partsCompleted', 'Parts completed', 'which components are finished']
 ];
 
-const TAG_AXES = [
-  ['genre', 'Genre'], ['structure', 'Structure'], ['perspective', 'Perspective'],
-  ['players', 'Players'], ['length', 'Length'], ['demand', 'Demand'],
-  ['mood', 'Mood'], ['artSound', 'Art & Sound'], ['setting', 'Setting']
-];
+/* Every tag on a game page filters the library by that tag.
 
+   It used to filter only for `genre` and fall through to a free-text SEARCH for
+   the other eight axes, so clicking `Single Player` searched the library for
+   the words "single player" and found nothing - the tag was a link that
+   promised a filter and delivered zero results. The heading above these tags
+   says "every one filters the library", and now every one does. */
 function tagLink(axis, value, cls) {
   const a = el('a', 'tagl' + (cls ? ' ' + cls : ''), value);
-  a.href = axis === 'genre' ? '#/?genre=' + encodeURIComponent(value) : '#/';
-  if (axis !== 'genre') a.href = '#/?q=' + encodeURIComponent(value);
+  a.href = '#/?' + axis + '=' + encodeURIComponent(value);
   return a;
 }
 
@@ -714,7 +776,9 @@ function buildFilters() {
   const box = $('#filters');
   box.replaceChildren();
 
-  const mk = (id, label, options, value, cls) => {
+  /* `parent` defaults to the always-visible bar; the extra-filter panel passes
+     itself so its controls are built straight into it. */
+  const mk = (id, label, options, value, cls, parent) => {
     const g = el('span', 'fgroup');
     const l = el('label', null, label); l.htmlFor = 'f-' + id;
     const s = el('select'); s.id = 'f-' + id;
@@ -726,7 +790,7 @@ function buildFilters() {
       s.appendChild(opt);
     });
     g.append(l, s);
-    box.appendChild(g);
+    (parent || box).appendChild(g);
     return s;
   };
 
@@ -769,11 +833,57 @@ function buildFilters() {
   mk('status', 'Status', statusOpts, state.status)
     .onchange = e => { state.status = e.target.value; sync(); };
 
-  if (state.platform || state.store || state.genre || state.status || state.category || state.flag) {
+  /* ---- the eight axes behind "More filters" ----------------------------
+     Kept off the opening screen on purpose: Platform, Store, Genre and Status
+     answer almost every question, and nine dropdowns in a row is a wall.
+
+     The panel FORCES ITSELF OPEN whenever one of its filters is set, which is
+     what makes arriving from a game page work: click `Single Player`, land on
+     a filtered library, and the control that did it is visible and clearable
+     rather than an invisible reason the list looks short. */
+  const activeExtras = EXTRA_AXES.filter(([k]) => state[k]);
+  const open = panelOpen || activeExtras.length > 0;
+
+  const more = el('button', 'morebtn' + (open ? ' on' : ''));
+  more.type = 'button';
+  more.setAttribute('aria-expanded', open ? 'true' : 'false');
+  more.appendChild(el('span', 'chev', open ? '▾' : '▸'));
+  more.append(open ? 'Fewer filters' : 'More filters');
+  if (activeExtras.length) more.appendChild(el('span', 'cnt', String(activeExtras.length)));
+  more.onclick = () => {
+    /* Closing the panel clears what is inside it. Leaving a filter applied
+       behind a closed panel is exactly the "invisible reason the list looks
+       short" this feature exists to remove. */
+    if (open) { EXTRA_AXES.forEach(([k]) => { state[k] = ''; }); }
+    panelOpen = panelPref(!open);
+    sync();
+  };
+  box.appendChild(more);
+
+  if (open) {
+    const panel = el('div', 'morepanel');
+    EXTRA_AXES.forEach(([key, label]) => {
+      const facet = fx[key];
+      /* An axis with no facet in the payload renders nothing at all, rather
+         than an empty dropdown that looks broken. `artSound` was in this
+         position until v120. */
+      if (!facet || !facet.length) return;
+      const sel = mk(key, label, opts(facet, 'Any ' + label.toLowerCase()),
+                     state[key], null, panel);
+      sel.onchange = e => { state[key] = e.target.value; sync(); };
+    });
+    box.appendChild(panel);
+  }
+
+  const anyFilter = state.platform || state.store || state.category || state.status ||
+    state.flag || TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
+  if (anyFilter) {
     const b = el('button', 'clearall', 'Clear filters');
     b.onclick = () => {
-      state.platform = state.store = state.category = state.genre = state.status = '';
+      state.platform = state.store = state.category = state.status = '';
       state.flag = '';
+      TAG_AXES.forEach(([k]) => { state[k] = ''; });
+      LINK_FILTERS.forEach(([k]) => { state[k] = ''; });
       sync();
     };
     box.appendChild(b);
@@ -903,10 +1013,10 @@ function writeUrl() {
   if (state.platform) p.set('platform', state.platform);
   if (state.store) p.set('store', state.store);
   if (state.category) p.set('category', state.category);
-  if (state.genre) p.set('genre', state.genre);
+  TAG_AXES.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.status) p.set('status', state.status);
   if (state.flag) p.set('flag', state.flag);
-  if (state.shelf) p.set('shelf', state.shelf);
+  LINK_FILTERS.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.sort !== 'title' || state.dir !== 'asc') p.set('sort', state.sort + ':' + state.dir);
   if (state.hideShovelware) p.set('hide', 'shovelware');
   const base = state.view === 'completions' ? '#/completions' : '#/';
@@ -926,7 +1036,14 @@ function route() {
   if (path.startsWith('/game/')) { renderDetail(path.slice(6)); return; }
 
   document.title = 'Game Library';
+  /* Coming back from a game page, start at the top. Tags sit well down a long
+     detail page, so clicking one used to land you in the middle of the filtered
+     list with the filter bar off-screen above you - it read as "nothing
+     happened". Only on the detail -> list move: leave scroll alone when a
+     filter changes, or the page would jump under you mid-browse. */
+  const cameFromDetail = state.mode === 'detail';
   state.mode = 'list';
+  if (cameFromDetail) window.scrollTo(0, 0);
   $('#browse').hidden = false;
   $('#sentinel').hidden = false;
   state.view = path === '/completions' ? 'completions' : 'library';
@@ -936,13 +1053,13 @@ function route() {
   /* The URL fully describes the view. Reset every filter first, then apply
      only what the params say - otherwise filters accumulate across hash
      navigations and #/?store=Xbox silently keeps the previous genre. */
-  state.genre = params.get('genre') || '';
+  TAG_AXES.forEach(([k]) => { state[k] = params.get(k) || ''; });
   state.store = params.get('store') || '';
   state.platform = params.get('platform') || '';
   state.category = params.get('category') || '';
   state.status = params.get('status') || '';
   state.flag = params.get('flag') || '';
-  state.shelf = params.get('shelf') || '';
+  LINK_FILTERS.forEach(([k]) => { state[k] = params.get(k) || ''; });
   state.q = params.get('q') || '';
   const sp = (params.get('sort') || 'title:asc').split(':');
   state.sort = SORTS[sp[0]] ? sp[0] : 'title';
