@@ -55,16 +55,21 @@ a{color:var(--blue)}
 .cpill b{display:block; font-family:var(--mono); font-size:15px; font-weight:500; font-variant-numeric:tabular-nums; line-height:1.15}
 .cpill span{font-size:10px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.07em}
 .cpill.m b{color:var(--mint)}
-/* Was an unlabelled gear that read as "settings". It is a Stats page, so it
-   says so - an icon alone was making a whole section of the site invisible. */
+/* A bar-chart icon, square, and exactly as tall as the count pills beside it.
+   `align-self:stretch` takes the height from the row rather than naming a
+   number, so it stays matched if the pills ever change size. Width comes from
+   padding, NOT from `aspect-ratio`: in a flex row the width is resolved from
+   content before an aspect ratio can apply, which collapsed the button to a
+   17px sliver. The accessible name lives on aria-label - there is no visible
+   text left to carry it. */
 .statsbtn{
-  height:36px; border-radius:10px; border:1px solid var(--line-2); background:var(--panel);
-  color:var(--ink-3); display:flex; align-items:center; justify-content:center; gap:7px;
-  flex:none; cursor:pointer; padding:0 13px; font-family:var(--ui); font-size:12.5px; font-weight:700;
+  align-self:stretch; padding:0 19px;
+  border-radius:10px; border:1px solid var(--line-2); background:var(--panel);
+  color:var(--ink-3); display:flex; align-items:center; justify-content:center;
+  flex:none; cursor:pointer;
 }
 .statsbtn:hover{color:var(--blue); border-color:var(--blue-mid)}
 .statsbtn.on{color:var(--blue); background:var(--blue-soft); border-color:var(--blue-mid)}
-@media (max-width:560px){ .statsbtn span{display:none} .statsbtn{padding:0; width:36px} }
 
 .searchbar{display:flex; align-items:center; gap:11px; margin-top:18px; border:1.5px solid var(--line-2); background:var(--panel); border-radius:11px; padding:2px 15px}
 .searchbar:focus-within{border-color:var(--blue-mid); box-shadow:0 0 0 3px var(--blue-soft)}
