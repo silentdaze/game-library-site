@@ -361,7 +361,6 @@ function sortResults(list) {
 
 /* ---------------------------------------------------------------- filters */
 
-const completionStatuses = () => (META.completionStatuses || ['Beaten']);
 
 /* One sentence per status that is in the completion view but is not `Beaten`,
    because a reader seeing 513 completions against a header of 499 deserves to
