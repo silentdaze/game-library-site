@@ -1,0 +1,5 @@
+# macOS Finder view settings. Not part of the site, and it changes every time
+# a Finder window here is resized or re-sorted - which would show up as a
+# pending change with nothing real in it. publish.sh runs `git add -A`, so
+# without this line it would be published.
+.DS_Store
