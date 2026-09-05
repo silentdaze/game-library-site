@@ -390,3 +390,18 @@ a.bar:hover .bf{background:var(--blue)}
   .bar{grid-template-columns:minmax(0,8em) 1fr auto; gap:8px}
   .bar .bl{font-size:12px}
 }
+
+/* Played / Logged, scoping the ranked lists below them. Two genuinely different
+   questions, so they get a real control rather than a footnote. */
+.stabs{display:flex; gap:8px; margin:24px 0 4px; flex-wrap:wrap}
+.stab{
+  display:flex; flex-direction:column; align-items:flex-start; gap:1px;
+  font-family:var(--ui); text-align:left; cursor:pointer; padding:9px 15px;
+  border:1.5px solid var(--line-2); background:var(--panel); border-radius:10px;
+}
+.stab b{font-size:13px; font-weight:700; color:var(--ink-2)}
+.stab span{font-family:var(--mono); font-size:10px; color:var(--ink-4); font-variant-numeric:tabular-nums}
+.stab:hover{border-color:var(--blue-mid)}
+.stab.on{border-color:var(--blue-mid); background:var(--blue-soft)}
+.stab.on b{color:var(--blue)}
+.stab.on span{color:var(--blue)}

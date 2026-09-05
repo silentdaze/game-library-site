@@ -142,6 +142,11 @@ function panelPref(v) {
 }
 let panelOpen = panelPref();
 
+/* Which set the Stats page's ranked lists describe: 'played' or 'logged'.
+   Played is the default - it is the more interesting question, and the one the
+   whole-library figures at the top of the page do not answer. */
+let statsScope = 'played';
+
 const SORTS = {
   title:     { label: 'A\u2013Z',    rev: 'Z\u2013A',   name: 'Alphabetical' },
   /* label = ascending, rev = descending. */
@@ -1029,11 +1034,10 @@ function renderStats() {
   const h = $('#stats');
   h.replaceChildren();
   const c = META.counts;
-  const fx = META.facets;
   const sheet = el('div', 'sheet');
   sheet.appendChild(el('h2', null, 'Stats'));
   sheet.appendChild(el('p', 'sub',
-    'Everything here is counted from the workbook at build time. Most of it is a filter — click through to the library with it applied.'));
+    'Every number here is counted from the library itself. Most of them are filters — click one to drop into the library with it applied.'));
 
   /* ---- headline tiles. A hero number is not a chart; four of them are not a
      chart either. Bar charts start below. ---- */
@@ -1062,56 +1066,125 @@ function renderStats() {
   if (yr) sheet.appendChild(statPanel('Games finished each year',
     'Counted off the quarter recorded against every played game. Hover a column for its year.', yr));
 
-  /* ---- ranked lists, two to a row on a wide screen ---- */
-  const pair = () => { const d = el('div', 'spair'); sheet.appendChild(d); return d; };
-  const top = (arr, n) => (arr || []).slice(0, n);
+  /* ---- the ranked lists, scoped by a tab ------------------------------
 
-  const r1 = pair();
-  if (fx.genre && fx.genre.length) {
-    r1.appendChild(statPanel('Most common genres', `${fx.genre.length} genres in use.`,
-      barList(top(fx.genre, 10).map(f =>
-        ({ label: f.value, n: f.count, href: '#/?genre=' + encodeURIComponent(f.value) })))));
-  }
-  if (fx.series && fx.series.length) {
-    r1.appendChild(statPanel('Biggest series',
-      `${fx.series.length} series across ${GAMES.filter(g => (g.series || []).length).length.toLocaleString()} games.`,
-      barList(top(fx.series, 10).map(f =>
-        ({ label: f.value, n: f.count, href: '#/?series=' + encodeURIComponent(f.value) })))));
-  }
+     Two questions, and they are genuinely different: "what is in the library"
+     and "what have I actually played". Owning 24 Star Wars games says something
+     about a bundle; having played six says something about him. `Played`
+     leads because it is the more interesting of the two - Justin's call.
 
-  /* Developers are not a facet in the payload - they are a search term - so the
-     tally is built here from the games themselves. */
-  const devs = new Map();
-  GAMES.forEach(g => (g.developers || []).forEach(d => devs.set(d, (devs.get(d) || 0) + 1)));
-  const devTop = [...devs.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+     Every list below is computed from the SET, never from META.facets, so both
+     tabs go down one code path and cannot drift apart. The facets are still the
+     authority for one thing - the duration ORDER of `length` - because that
+     ordering is derived at export time from the value itself. */
+  const scopeWrap = el('div', 'scoped');
+  sheet.appendChild(scopeWrap);
 
-  const r2 = pair();
-  if (devTop.length) {
-    r2.appendChild(statPanel('Studios I own the most from',
-      `${devs.size.toLocaleString()} developers named across the library.`,
-      barList(devTop.slice(0, 10).map(([name, n]) =>
-        ({ label: name, n, href: '#/?q=' + encodeURIComponent(name) })))));
-  }
-  if (fx.platform && fx.platform.length) {
-    r2.appendChild(statPanel('Where the library lives', 'By platform group.',
-      barList(top(fx.platform, 8).map(f =>
-        ({ label: f.value, n: f.count, href: '#/?platform=' + encodeURIComponent(f.value) })))));
-  }
+  const SCOPES = [
+    ['played', 'Played', () => GAMES.filter(g => g.status && g.status !== 'Unplayed'), '#/played'],
+    ['logged', 'Logged', () => GAMES, '#/']
+  ];
 
-  const r3 = pair();
-  if (fx.length && fx.length.length) {
-    /* Already ordered shortest-to-longest by the export, on a key derived from
-       the value - so this one is NOT re-sorted by size. Duration order is the
-       information. */
-    r3.appendChild(statPanel('How long the games are', 'Shortest first, not biggest first.',
-      barList(fx.length.map(f =>
-        ({ label: f.value, n: f.count, href: '#/?length=' + encodeURIComponent(f.value) })))));
+  function drawScope() {
+    scopeWrap.replaceChildren();
+    const tabs = el('div', 'stabs');
+    SCOPES.forEach(([id, label, getSet]) => {
+      const n = getSet().length;
+      const b = el('button', 'stab' + (statsScope === id ? ' on' : ''));
+      b.appendChild(el('b', null, label));
+      b.appendChild(el('span', null, n.toLocaleString() + ' games'));
+      b.onclick = () => { statsScope = id; drawScope(); };
+      tabs.appendChild(b);
+    });
+    scopeWrap.appendChild(tabs);
+
+    const [, , getSet, hrefBase] = SCOPES.find(sc => sc[0] === statsScope) || SCOPES[0];
+    const set = getSet();
+    const noun = statsScope === 'played' ? 'played' : 'logged';
+    /* Links stay INSIDE the scope being looked at: a series on the Played tab
+       goes to that series filtered to played games, so the number he clicked is
+       the number he lands on. Nothing is more confusing on a stats page than a
+       figure that changes when you follow it. */
+    const link = (k, v) => hrefBase + '?' + k + '=' + encodeURIComponent(v);
+
+    /* One tally for every axis, over whichever set the tab selected. */
+    const tallyOf = key => {
+      const m = new Map();
+      set.forEach(g => (g[key] || []).forEach(v => m.set(v, (m.get(v) || 0) + 1)));
+      return [...m.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
+    };
+    const rows = (arr, n, key) => arr.slice(0, n).map(([value, count]) =>
+      ({ label: value, n: count, href: link(key, value) }));
+
+    const pair = () => { const d = el('div', 'spair'); scopeWrap.appendChild(d); return d; };
+
+    const genres = tallyOf('genre').filter(([v]) => v !== 'Unverified');
+    const series = tallyOf('series');
+    const r1 = pair();
+    if (genres.length) {
+      r1.appendChild(statPanel('Most common genres',
+        `${genres.length} genres across the ${set.length.toLocaleString()} ${noun} games.`,
+        barList(rows(genres, 10, 'genre'))));
+    }
+    if (series.length) {
+      const inSeries = set.filter(g => (g.series || []).length).length;
+      r1.appendChild(statPanel('Biggest series',
+        `${series.length} series across ${inSeries.toLocaleString()} ${noun} games.`,
+        barList(rows(series, 10, 'series'))));
+    }
+
+    /* Developers are not a facet in the payload - they are a search term - so
+       these link to a search rather than a filter, scoped by nothing. That is
+       the one link here that cannot honour the tab, and it is why the panel
+       says "owned" or "played" in its own title rather than implying it. */
+    const devs = tallyOf('developers');
+    const r2 = pair();
+    if (devs.length) {
+      r2.appendChild(statPanel(
+        statsScope === 'played' ? 'Studios I have played the most' : 'Studios I own the most from',
+        `${devs.length.toLocaleString()} developers named across the ${noun} games.`,
+        barList(devs.slice(0, 10).map(([name, n]) =>
+          ({ label: name, n, href: '#/?q=' + encodeURIComponent(name) })))));
+    }
+    /* The Played tab asks where he PLAYED them, so it reads `playedGroups` -
+       parsed from `Played On`. `platformGroups` blends owned-with-played, which
+       is right for browsing and would answer the wrong question here: it puts
+       PC at 153 played games when only 30 were actually played on PC.
+
+       The platform FILTER behind these links is the blended one, so on the
+       Played tab the bars and the destination count can differ. Said out loud
+       in the note rather than quietly papered over. */
+    const usePlayed = statsScope === 'played';
+    const plats = tallyOf(usePlayed ? 'playedGroups' : 'platformGroups');
+    if (plats.length) {
+      let note = 'By platform group.';
+      if (usePlayed) {
+        const noPlat = set.filter(g => !(g.playedGroups || []).length).length;
+        note = 'Where they were actually played, not where they are owned.'
+          + (noPlat ? ` ${noPlat} played ${noPlat === 1 ? 'game has' : 'games have'} no platform recorded.` : '');
+      }
+      r2.appendChild(statPanel(usePlayed ? 'Where I played them' : 'Where the library lives',
+        note, barList(rows(plats, 8, 'platform'))));
+    }
+
+    const r3 = pair();
+    const lenCounts = new Map(tallyOf('length'));
+    /* Duration order, taken from the export's own ordering of the facet, so a
+       value with zero games on this tab simply drops out rather than being
+       re-sorted to the wrong place. */
+    const lenRows = (META.facets.length || [])
+      .filter(f => lenCounts.get(f.value))
+      .map(f => ({ label: f.value, n: lenCounts.get(f.value), href: link('length', f.value) }));
+    if (lenRows.length) {
+      r3.appendChild(statPanel('How long the games are', 'Shortest first, not biggest first.',
+        barList(lenRows)));
+    }
+    const stores = tallyOf('stores');
+    if (stores.length) {
+      r3.appendChild(statPanel('Stores', `${stores.length} of them.`, barList(rows(stores, 8, 'store'))));
+    }
   }
-  if (fx.store && fx.store.length) {
-    r3.appendChild(statPanel('Stores', `${fx.store.length} of them.`,
-      barList(top(fx.store, 8).map(f =>
-        ({ label: f.value, n: f.count, href: '#/?store=' + encodeURIComponent(f.value) })))));
-  }
+  drawScope();
 
   /* ---- library health, unchanged in substance ---- */
   const hsec = el('div', 'spanel');
