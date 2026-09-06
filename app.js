@@ -598,6 +598,74 @@ function tagLink(axis, value, cls) {
   return a;
 }
 
+/* --- old-URL rescue -------------------------------------------------------
+   Merges retire `Site ID`s: seventeen went at v137 alone, and two of those
+   were RETITLES, where the row still exists at a new address. A bookmark to
+   any of them used to land on a bare "No such game".
+
+   The map is DERIVED, never a hardcoded list of dead ids. Every `Alt Titles`
+   and `Other Versions Owned` value is slugged, and any that is not itself a
+   live id becomes an alias for the row carrying it. That is exactly the column
+   the chat merges a retired title into, so this keeps working for merges that
+   have not happened yet - including the `999: Nine Hourse` retitle waiting in
+   RETURN_TO_CHAT.md.
+
+   An alias claimed by two different rows is DROPPED, never guessed:
+   `Batman: Return to Arkham` split into Arkham Asylum and Arkham City, and
+   silently picking one would be worse than saying the link is dead. Those fall
+   through to the not-found page, which now offers the search instead. */
+const idSlug = t => String(t)
+  .normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+  .replace(/\+/g, ' plus ')
+  .replace(/[^\x00-\x7F]/g, '')
+  .toLowerCase()
+  .replace(/[^a-z0-9]+/g, '-')
+  .replace(/^-|-$/g, '')
+  .slice(0, 60);
+
+let ALIAS = null;
+function aliasIndex() {
+  if (ALIAS) return ALIAS;
+  const live = new Set(GAMES.map(g => g.id));
+  ALIAS = new Map();
+  const claim = (raw, id) => {
+    const s = idSlug(raw);
+    if (!s || live.has(s)) return;          /* never shadow a real page */
+    if (!ALIAS.has(s)) ALIAS.set(s, id);
+    else if (ALIAS.get(s) !== id) ALIAS.set(s, null);   /* contested */
+  };
+  GAMES.forEach(g => {
+    (g.altTitles || []).forEach(t => claim(t, g.id));
+    /* `Other Versions Owned` is `Name (Platform)`, and the platform half can
+       itself hold brackets - `The Outer Worlds (PC (Windows))`. Greedy, so the
+       whole trailing parenthetical goes. */
+    (g.otherVersions || []).forEach(t => claim(String(t).replace(/\s*\(.*\)\s*$/, ''), g.id));
+  });
+  return ALIAS;
+}
+
+/* Best-effort recovery for a dead id with no alias. Words shared with a live
+   title, most first; a single shared word is noise, not a suggestion, so it is
+   dropped. Ties are all returned - `batman-return-to-arkham` genuinely IS two
+   games and showing both is the honest answer. */
+function didYouMean(id) {
+  const want = new Set(id.split('-').filter(w => w.length > 2));
+  if (!want.size) return [];
+  const scored = [];
+  GAMES.forEach(g => {
+    const have = new Set(idSlug(g.title).split('-'));
+    let n = 0; want.forEach(w => { if (have.has(w)) n++; });
+    if (n) scored.push([n, g]);
+  });
+  if (!scored.length) return [];
+  const best = Math.max(...scored.map(x => x[0]));
+  if (best < 2) return [];
+  return scored.filter(x => x[0] === best)
+               .map(x => x[1])
+               .sort((a, b) => a.title.localeCompare(b.title))
+               .slice(0, 4);
+}
+
 function renderDetail(id) {
   const g = GAMES.find(x => x.id === id);
   const view = $('#view');
@@ -611,10 +679,33 @@ function renderDetail(id) {
        old link or bookmark to a retired Site ID lands here. Reset the title
        too - renderDetail sets it only on the found path, so without this the
        tab keeps the previously-viewed game's name on a dead link. */
+    const moved = aliasIndex().get(id);
+    if (moved) {
+      /* `replace`, not `assign`: the dead id must not sit in history, or Back
+         from the game lands on it and bounces straight forward again. */
+      location.replace('#/game/' + moved);
+      return;
+    }
     document.title = 'Game Library';
     const e = el('div', 'empty');
     e.appendChild(el('b', null, 'No such game'));
-    const back = el('a', null, '← Back to the library'); back.href = '#/';
+    /* No alias, so the row was split rather than merged - `Batman: Return to
+       Arkham` became Arkham Asylum and Arkham City. Handing the id straight to
+       the search box does NOT work: search is an AND over every word, and no
+       one row contains `batman` AND `return` AND `arkham`, so it lands on
+       "Nothing matches" - a dead end dressed up as a route. Score the live
+       titles on shared words instead and offer the best ones directly. */
+    const near = didYouMean(id);
+    if (near.length) {
+      e.appendChild(el('div', 'plain', 'It may have been split or renamed. Did you mean:'));
+      const list = el('div', 'plain');
+      near.forEach((n, i) => {
+        if (i) list.append(' \u00b7 ');
+        const a = el('a', null, n.title); a.href = '#/game/' + n.id; list.appendChild(a);
+      });
+      e.appendChild(list);
+    }
+    const back = el('a', null, '\u2190 Back to the library'); back.href = '#/';
     e.appendChild(back);
     view.appendChild(e);
     return;
@@ -639,7 +730,12 @@ function renderDetail(id) {
   dt.appendChild(el('h1', null, g.title));
   const sub = el('div', 'dsub');
   const y = year(g); if (y) sub.append(y);
-  [...(g.developers || []), ...(g.publishers || [])].slice(0, 4).forEach(p => {
+  /* A studio that both made and published a game appears in BOTH columns, and
+     the byline used to print it twice - `MidBoss · MidBoss`. 1,555 of 4,321
+     rows are affected and on 1,152 the two lists are identical, so this is the
+     common case, not the edge one. Dedupe on the way in; order is preserved,
+     developers first, so the reading is unchanged where the names differ. */
+  [...new Set([...(g.developers || []), ...(g.publishers || [])])].slice(0, 4).forEach(p => {
     if (sub.childNodes.length) sub.append(' · ');
     const a = el('a', null, p); a.href = '#/?q=' + encodeURIComponent(p); sub.appendChild(a);
   });
