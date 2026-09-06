@@ -515,6 +515,7 @@ function rowNode(r) {
   const cov = el('span', 'cov');
   if (hasCover(g.id)) {
     const img = el('img'); img.loading = 'lazy'; img.alt = '';
+    img.onload = () => fitShape(img);
     img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.textContent = 'no cover'; };
     cov.appendChild(img);
@@ -679,6 +680,23 @@ const hasCover = id => {
   return COVERSET.has(id);
 };
 
+/* Cover art is not one shape, so one crop rule cannot serve all of it.
+   Every store ships portrait box art EXCEPT itch.io, whose standard cover is
+   630x500 - landscape by design. Justin owns 1,745 itch.io games, so the
+   library will eventually hold well over a thousand landscape covers, plus a
+   handful of store banners Playnite filed as box art (`Hades` arrived as a
+   460x215 Steam header).
+
+   Cropping those to fill a portrait slot throws away most of the picture. So:
+   portrait art fills the slot as before, and anything square or wider is fitted
+   INSIDE it instead - the whole image, uncropped, on the slot's own background.
+   Nothing is ever stretched either way. Measured from the decoded image, so it
+   needs no data from the payload and works for art that has not arrived yet. */
+function fitShape(img) {
+  if (!img.naturalWidth || !img.naturalHeight) return;
+  if (img.naturalWidth / img.naturalHeight > 1.02) img.classList.add('wide');
+}
+
 function renderDetail(id) {
   const g = GAMES.find(x => x.id === id);
   const view = $('#view');
@@ -733,7 +751,9 @@ function renderDetail(id) {
   const head = el('div', 'dhead');
   const cov = el('div', 'cover-slot');
   if (hasCover(g.id)) {
-    const img = el('img'); img.alt = ''; img.src = 'covers/' + g.id + '.webp';
+    const img = el('img'); img.alt = '';
+    img.onload = () => fitShape(img);
+    img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
     cov.appendChild(img);
   } else { cov.append('◻'); cov.appendChild(el('div', null, 'cover art')); cov.appendChild(el('div', null, 'coming soon')); }

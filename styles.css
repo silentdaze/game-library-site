@@ -410,3 +410,10 @@ a.bar:hover .bf{background:var(--blue)}
 .stab.on{border-color:var(--blue-mid); background:var(--blue-soft)}
 .stab.on b{color:var(--blue)}
 .stab.on span{color:var(--blue)}
+
+
+/* Non-portrait cover art - itch.io's 630x500 standard, squares, and the odd
+   store banner. Fitted inside the slot rather than cropped to fill it, so the
+   whole picture survives. `contain` never distorts; it only letterboxes. */
+.cov img.wide, .cover-slot img.wide{ object-fit:contain; background:var(--panel-3) }
+.cover-slot img.wide{ padding:4px }
