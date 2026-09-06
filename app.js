@@ -513,7 +513,7 @@ function rowNode(r) {
   a.href = '#/game/' + g.id;
 
   const cov = el('span', 'cov');
-  if (META.covers) {
+  if (hasCover(g.id)) {
     const img = el('img'); img.loading = 'lazy'; img.alt = '';
     img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.textContent = 'no cover'; };
@@ -666,6 +666,19 @@ function didYouMean(id) {
                .slice(0, 4);
 }
 
+/* Which games actually have cover art. `META.covers` is the list of Site IDs
+   with a file on disk, not a flag - art lands in waves, so asking for every
+   row's image would 404 on the thousands not done yet. An empty list is
+   truthy in JS, which is exactly the bug a plain `if (META.covers)` would
+   reintroduce, so always go through hasCover(). */
+let COVERSET = null;
+const hasCover = id => {
+  /* Built on first use, NOT at load: META is still null while the payload is
+     being fetched, and touching it here threw before anything rendered. */
+  if (COVERSET === null) COVERSET = new Set(Array.isArray(META && META.covers) ? META.covers : []);
+  return COVERSET.has(id);
+};
+
 function renderDetail(id) {
   const g = GAMES.find(x => x.id === id);
   const view = $('#view');
@@ -719,7 +732,7 @@ function renderDetail(id) {
 
   const head = el('div', 'dhead');
   const cov = el('div', 'cover-slot');
-  if (META.covers) {
+  if (hasCover(g.id)) {
     const img = el('img'); img.alt = ''; img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
     cov.appendChild(img);
@@ -747,7 +760,7 @@ function renderDetail(id) {
   st.appendChild(el('span', 'spill' + (g.owned ? '' : ' no'), g.owned ? 'Owned' : 'Not owned'));
   if (g.access) st.appendChild(el('span', 'spill', g.access));
   dt.appendChild(st);
-  dt.appendChild(el('div', 'slug', META.covers ? 'covers/' + g.id + '.webp' : g.id));
+  dt.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
   head.appendChild(dt);
   view.appendChild(head);
 
