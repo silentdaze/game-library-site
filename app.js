@@ -219,7 +219,11 @@ function buildIndex() {
     g._alt = (g.altTitles || []).map(norm);
     g._people = [...(g.developers || []), ...(g.publishers || [])].map(norm);
     g._misc = [...(g.genre || []), ...(g.series || [])].filter(Boolean).map(norm);
-    g._contains = (g.contains || []).map(norm);
+    /* `contains` became [{name, ownedOn}] at v144, when the column gained an
+       ownership suffix. Search indexes the NAME only - a component's store is
+       not something anyone types into a search box. */
+    g._containsNames = (g.contains || []).map(c => c.name);
+    g._contains = g._containsNames.map(norm);
     /* Flattened twins, built once. Word-order-independent matching runs against
        these; the exact tiers still run against the originals. */
     g._tf = flat(g.title);
@@ -305,7 +309,7 @@ function search(query) {
        purchases each and both results are correct. The standalone row and the
        "found inside" result both appear. Do NOT deduplicate them - handoff
        9.10. */
-    const hits = (g.contains || []).filter((_, i) =>
+    const hits = (g._containsNames || []).filter((_, i) =>
       g._containsf[i].includes(qf) || hasAll(g._containsf[i], toks));
     if (hits.length) { inside = hits; if (!score) score = 100; }
 
@@ -697,6 +701,27 @@ function fitShape(img) {
   if (img.naturalWidth / img.naturalHeight > 1.02) img.classList.add('wide');
 }
 
+/* Fetched once, on the first detail page, and reused after that. The promise
+   itself is cached rather than the result, so two rapid navigations share one
+   request instead of firing two. */
+let DESC_PROMISE = null;
+function loadDescriptions() {
+  if (!DESC_PROMISE) {
+    /* Cache-buster taken from THIS script's own stamped URL. `index.html` is
+       written with `app.js?v=<hash>` and that hash covers descriptions.json
+       too, so a description-only change still lands on a fresh URL. Reading it
+       back here avoids a second version field that could disagree - and
+       `library.json` is not rewritten when only descriptions move, so a field
+       inside it could not have carried this. */
+    const stamp = (document.querySelector('script[src*="app.js"]') || {}).src || '';
+    const v = (stamp.match(/[?&]v=([^&]+)/) || [, ''])[1];
+    DESC_PROMISE = fetch('data/descriptions.json' + (v ? '?v=' + v : ''))
+      .then(r => r.ok ? r.json() : {})
+      .catch(() => ({}));
+  }
+  return DESC_PROMISE;
+}
+
 function renderDetail(id) {
   const g = GAMES.find(x => x.id === id);
   const view = $('#view');
@@ -784,8 +809,30 @@ function renderDetail(id) {
   head.appendChild(dt);
   view.appendChild(head);
 
-  view.appendChild(el('div', 'desc-empty',
-    'No description yet — descriptions and cover art are on the way.'));
+  /* Descriptions live in their own file and are fetched the first time any
+     detail page opens - never in `library.json`, which every visit loads to
+     power search and the filters. Full text there would take it from 2.4 MB to
+     about 8 MB for prose most visits never read.
+
+     The HTML is third-party store copy, sanitised at export time down to a
+     14-tag allowlist with every attribute dropped: no `img`, `iframe`, `a`,
+     `script`, `src` or `href` survives, so `innerHTML` here has nothing left to
+     inject. Verified on all 4,150 values. */
+  const dbox = el('div', 'desc-empty', 'Loading description…');
+  view.appendChild(dbox);
+  loadDescriptions().then(map => {
+    const html = map && map[g.id];
+    if (html) {
+      dbox.className = 'desc';
+      dbox.innerHTML = html;
+    } else {
+      dbox.className = 'desc-empty';
+      dbox.textContent = 'No description yet.';
+    }
+  }).catch(() => {
+    dbox.className = 'desc-empty';
+    dbox.textContent = 'No description yet.';
+  });
 
   /* Ownership & access first - it is the main thing you want when you look a
      game up. Tags second. */
@@ -880,12 +927,28 @@ function renderDetail(id) {
       const rh = el('div', 'rh'); rh.appendChild(el('b', null, label)); rh.appendChild(el('i', null, hint));
       b.appendChild(rh);
       const ul = el('ul');
-      g[key].forEach(v => {
+      g[key].forEach(entry => {
+        /* `contains` entries are objects since v144; every other relationship
+           column is still a plain string. */
+        const v = (key === 'contains') ? entry.name : entry;
         const li = el('li');
         const match = GAMES.find(x => x.title === v);
         if (match) { const a = el('a', null, v); a.href = '#/game/' + match.id; li.appendChild(a); }
         else li.append(v);
         if (key === 'contains' && doneMap[v]) li.appendChild(el('span', 'done', '✓ ' + doneMap[v]));
+        /* Justin's ask, in his words: "if I own one part of a complete
+           collection on GOG, it should say that in the Contains section."
+           Blank means the part comes only with the box, which is the common
+           case and deliberately renders nothing at all. */
+        if (key === 'contains' && entry.ownedOn && entry.ownedOn.length) {
+          const own = el('span', 'own-sep');
+          own.append(' also owned on ');
+          entry.ownedOn.forEach((t, i) => {
+            if (i) own.append(', ');
+            own.appendChild(el('b', null, t));
+          });
+          li.appendChild(own);
+        }
         ul.appendChild(li);
       });
       b.appendChild(ul);

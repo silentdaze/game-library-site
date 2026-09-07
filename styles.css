@@ -417,3 +417,26 @@ a.bar:hover .bf{background:var(--blue)}
    whole picture survives. `contain` never distorts; it only letterboxes. */
 .cov img.wide, .cover-slot img.wide{ object-fit:contain; background:var(--panel-3) }
 .cover-slot img.wide{ padding:4px }
+
+/* `Contains` ownership suffix, v144. A component you also own standalone says
+   where; one that comes only with the box says nothing. Quiet on purpose - it
+   is a footnote to the component, not a second heading. */
+.own-sep{ color:var(--ink-3); font-size:11px }
+.own-sep b{ color:var(--ink-2); font-weight:600 }
+
+/* Game descriptions, v144. Third-party store copy, sanitised at export to a
+   14-tag allowlist. Constrained rather than styled richly: it is reference
+   text on a catalogue page, not an article. */
+.desc{ background:var(--panel); border:1px solid var(--line); border-radius:var(--r);
+       padding:16px 18px; margin-bottom:22px; font-size:13.5px; line-height:1.62;
+       color:var(--ink-2); max-height:420px; overflow-y:auto }
+.desc > *:first-child{ margin-top:0 }
+.desc > *:last-child{ margin-bottom:0 }
+.desc p{ margin:0 0 10px }
+.desc h2,.desc h3,.desc h4{ font-size:13.5px; font-weight:700; color:var(--ink-1);
+       margin:16px 0 6px; letter-spacing:0 }
+.desc ul,.desc ol{ margin:0 0 10px; padding-left:20px }
+.desc li{ margin-bottom:4px }
+.desc strong,.desc b{ color:var(--ink-1); font-weight:600 }
+.desc blockquote{ margin:0 0 10px; padding-left:12px; border-left:2px solid var(--line-2);
+       color:var(--ink-3) }
