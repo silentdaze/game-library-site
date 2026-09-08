@@ -105,6 +105,43 @@ a{color:var(--blue)}
 .clearall{align-self:flex-end; font-size:12.5px; color:var(--blue); background:none; border:0; cursor:pointer; padding:10px 6px; font-weight:700; font-family:var(--ui)}
 .clearall:hover{text-decoration:underline}
 
+/* One filter's own × - only rendered while that filter is set, alongside
+   "Clear filters" rather than instead of it: this clears one dropdown without
+   losing the others. Sits inside the select's own right padding, which
+   `select.clearable` widens and shifts the native arrow out of the way of. */
+.selwrap{position:relative; display:inline-flex}
+.fgroup select.clearable{padding-right:54px; background-position:right 33px center}
+.fselclear{
+  position:absolute; right:5px; top:50%; transform:translateY(-50%);
+  width:21px; height:21px; display:flex; align-items:center; justify-content:center;
+  border:0; background:transparent; color:var(--ink-4); cursor:pointer;
+  font-size:16px; line-height:1; border-radius:50%; padding:0;
+}
+.fselclear:hover{color:var(--coral); background:var(--panel-3)}
+
+/* "Hide" - a multi-select dropdown, so it's a real button + panel rather than
+   a <select> (which can't hold checkboxes). Styled to match the other filter
+   controls it now sits beside, having moved out of the sort menu. */
+.hidebtn{
+  display:flex; align-items:center; gap:8px; font-family:var(--ui); font-size:13px;
+  color:var(--ink); font-weight:600; border:1.5px solid var(--line-2);
+  background:var(--panel); border-radius:10px; padding:9px 11px; min-width:140px;
+  cursor:pointer; justify-content:space-between;
+}
+.hidebtn .chev{font-size:10px; color:var(--ink-4)}
+.hidebtn.active{border-color:var(--blue-mid); background-color:var(--blue-soft); color:var(--blue)}
+.hidebtn.active .chev{color:var(--blue)}
+.hidebtn.clearable{padding-right:36px}
+.hidemenu{
+  /* Right-edge-anchored, not left: the Hide control can land anywhere in a
+     wrapped filter row (it's often last), and a menu opening off the right
+     side of the viewport is what "Hidden Object Games" was clipping to on a
+     375px-wide screen before this. */
+  position:absolute; right:0; top:calc(100% + 7px); z-index:20; width:260px;
+  background:var(--panel); border:1px solid var(--line-2); border-radius:var(--r);
+  box-shadow:var(--sh-lg); padding:7px;
+}
+
 /* "More filters" — the eight tag axes that are not on the opening screen.
    The button sits on the same baseline as the dropdowns; the panel it opens
    takes a full row of its own below them. */

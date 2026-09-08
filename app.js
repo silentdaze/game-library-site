@@ -119,7 +119,12 @@ const LINK_FILTERS = [['shelf', 'shelf'], ['series', 'series']];
 const state = {
   q: '', platform: '', store: '', category: '', status: '',
   flag: '', shelf: '', series: '',
-  view: 'library', hideShovelware: false, sort: 'title', dir: 'asc',
+  /* Ids from META.shovelwareRules currently checked to hide - Demos, Hidden
+     Object Games, itch.io Highlights, itch.io Bundles as of 2026-09-08.
+     A list, not a single "hide shovelware" boolean: each rule is its own
+     real category now, and more than one can be hidden at once. */
+  hide: [],
+  view: 'library', sort: 'title', dir: 'asc',
   /* 'list' or 'detail'. The infinite-scroll observer must only ever append
      rows while a list is on screen. */
   mode: 'list'
@@ -142,6 +147,10 @@ function panelPref(v) {
 }
 let panelOpen = panelPref();
 
+/* Whether the Hide dropdown (below) is expanded. Not remembered across visits
+   like `panelOpen` - it is a momentary control, not a layout preference. */
+let hideMenuOpen = false;
+
 /* Which set the Stats page's ranked lists describe: 'played' or 'logged'.
    Played is the default - it is the more interesting question, and the one the
    whole-library figures at the top of the page do not answer. */
@@ -155,6 +164,34 @@ const SORTS = {
 };
 
 /* ---------------------------------------------------------------- helpers */
+
+/* Display-only simplification, never applied to the data itself: "PC
+   (Windows)" -> "PC" (it's the only PC value there is), and every Xbox
+   hardware generation -> plain "Xbox" - if it's in the library, it plays on
+   the current one, and nobody browsing needs to know which box it shipped on
+   in whichever year. Justin's call, 2026-09-08. Matches the leading token
+   only, so "Xbox One via Game Pass (Q2 2021)" simplifies to "Xbox via Game
+   Pass (Q2 2021)" rather than losing the service or the date. The Platform
+   FILTER already groups all of this under one "Xbox" / "PC" bucket
+   (PLATFORM_GROUPS in export_json.py) - this is only the raw per-game text. */
+function simplifyPlatform(s) {
+  return String(s)
+    .replace(/^PC \(Windows\)/, 'PC')
+    .replace(/^Xbox (?:360|One|Series)\b/, 'Xbox');
+}
+
+/* Applied to a whole list rather than one value at a time, because collapsing
+   generations can turn what were distinct entries into duplicates - `Inertial
+   Drift` is available on "Xbox, Xbox One, Xbox Series", which is one console
+   family, not three. */
+function simplifyPlatforms(arr) {
+  const seen = new Set(), out = [];
+  (arr || []).forEach(s => {
+    const t = simplifyPlatform(s);
+    if (!seen.has(t)) { seen.add(t); out.push(t); }
+  });
+  return out;
+}
 
 function year(g) {
   const m = /(\d{4})/.exec(g.releaseDate || '');
@@ -412,7 +449,7 @@ function passes(g) {
   for (const [key] of LINK_FILTERS) {
     if (state[key] && !(g[key] || []).includes(state[key])) return false;
   }
-  if (state.hideShovelware && (g.shovelware || []).length) return false;
+  if (state.hide.length && (g.shovelware || []).some(id => state.hide.includes(id))) return false;
   /* The Played view is every game with ANY status other than `Unplayed`.
      Derived, never a list of the statuses that happen to exist today - a
      seventh value joins it on its own, which is the whole lesson of the
@@ -429,8 +466,14 @@ function passes(g) {
 
 function compute() {
   RESULTS = search(state.q).filter(r => passes(r.g));
-  /* A typed query sorts by relevance; otherwise the chosen sort applies. */
-  if (!state.q) sortResults(RESULTS);
+  /* A typed query with the sort control still at its untouched default (A-Z,
+     ascending) ranks by relevance instead - that is what makes "mario wonder"
+     put the actual game first. But it was overriding EVERY sort choice,
+     including one the user had actually clicked, which just looked broken:
+     picking "Newest" or "Z-A" mid-search silently kept showing relevance
+     order. Any sort other than the untouched default now always applies. */
+  const sortIsDefault = state.sort === 'title' && state.dir === 'asc';
+  if (!state.q || !sortIsDefault) sortResults(RESULTS);
   RENDERED = 0;
   $('#view').replaceChildren();
   renderCount();
@@ -555,7 +598,7 @@ function rowNode(r) {
   a.appendChild(main);
 
   const right = el('span', 'rright');
-  if (g.platforms && g.platforms.length) right.appendChild(el('span', 'plat', g.platforms.slice(0, 2).join(' · ')));
+  if (g.platforms && g.platforms.length) right.appendChild(el('span', 'plat', simplifyPlatforms(g.platforms).slice(0, 2).join(' · ')));
   if (g.length && g.length.length) right.appendChild(el('span', 'len', g.length[0]));
   a.appendChild(right);
   return a;
@@ -840,8 +883,8 @@ function renderDetail(id) {
   own.appendChild(el('div', 'fs-label', 'Ownership & access'));
   const dl1 = el('dl', 'kv');
   const kv = (dl, k, node) => { dl.appendChild(el('dt', null, k)); const d = el('dd'); d.appendChild(node); dl.appendChild(d); };
-  if (g.ownedOn && g.ownedOn.length) kv(dl1, 'Owned on', el('span', 'plain', g.ownedOn.join(' · ')));
-  if (g.availableOn && g.availableOn.length) kv(dl1, 'Available on', el('span', 'plain', g.availableOn.join(' · ')));
+  if (g.ownedOn && g.ownedOn.length) kv(dl1, 'Owned on', el('span', 'plain', simplifyPlatforms(g.ownedOn).join(' · ')));
+  if (g.availableOn && g.availableOn.length) kv(dl1, 'Available on', el('span', 'plain', simplifyPlatforms(g.availableOn).join(' · ')));
   if (g.stores && g.stores.length) {
     const d = el('span'); d.style.display = 'contents';
     const wrapper = el('span'); wrapper.style.display = 'flex'; wrapper.style.flexWrap = 'wrap'; wrapper.style.gap = '6px';
@@ -875,7 +918,7 @@ function renderDetail(id) {
     kv(dl1, 'Complete edition', w);
   }
   if (g.ownership && g.ownership.length) kv(dl1, 'Ownership', el('span', 'plain', g.ownership.join(' · ')));
-  if (g.playedOn && g.playedOn.length) kv(dl1, 'Played on', el('span', 'plain mono', g.playedOn.join(' · ')));
+  if (g.playedOn && g.playedOn.length) kv(dl1, 'Played on', el('span', 'plain mono', g.playedOn.map(simplifyPlatform).join(' · ')));
   /* Finished / stopped / played - three meanings, so the label is looked up,
      never assumed. Handoff 9.13. */
   if (g.completed) kv(dl1, (statusMeta(g) || {}).dateLabel || 'Completed', el('span', 'plain mono', g.completed));
@@ -945,7 +988,7 @@ function renderDetail(id) {
           own.append(' also owned on ');
           entry.ownedOn.forEach((t, i) => {
             if (i) own.append(', ');
-            own.appendChild(el('b', null, t));
+            own.appendChild(el('b', null, simplifyPlatform(t)));
           });
           li.appendChild(own);
         }
@@ -986,10 +1029,14 @@ function buildFilters() {
   box.replaceChildren();
 
   /* `parent` defaults to the always-visible bar; the extra-filter panel passes
-     itself so its controls are built straight into it. */
-  const mk = (id, label, options, value, cls, parent) => {
+     itself so its controls are built straight into it. `onClear` is what a
+     lone filter's own × button runs - each filter clears itself differently
+     (Store also clears the dependent Category), so this is the caller's
+     rule, not a generic "set state[key] = ''" this function would get wrong. */
+  const mk = (id, label, options, value, cls, parent, onClear) => {
     const g = el('span', 'fgroup');
     const l = el('label', null, label); l.htmlFor = 'f-' + id;
+    const wrap = el('span', 'selwrap');
     const s = el('select'); s.id = 'f-' + id;
     if (value) s.className = 'active' + (cls ? ' ' + cls : ''); else if (cls) s.className = cls;
     options.forEach(o => {
@@ -998,7 +1045,16 @@ function buildFilters() {
       if (o.value === value) opt.selected = true;
       s.appendChild(opt);
     });
-    g.append(l, s);
+    wrap.appendChild(s);
+    if (value && onClear) {
+      s.classList.add('clearable');
+      const x = el('button', 'fselclear', '×');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Clear ' + label);
+      x.onclick = e => { e.preventDefault(); e.stopPropagation(); onClear(); };
+      wrap.appendChild(x);
+    }
+    g.append(l, wrap);
     (parent || box).appendChild(g);
     return s;
   };
@@ -1007,10 +1063,12 @@ function buildFilters() {
   const opts = (arr, all) => [{ value: '', label: all }].concat(
     arr.map(f => ({ value: f.value, label: `${f.value}  (${f.count.toLocaleString()})` })));
 
-  mk('platform', 'Platform', opts(fx.platform, 'Any platform'), state.platform)
+  mk('platform', 'Platform', opts(fx.platform, 'Any platform'), state.platform, null, null,
+     () => { state.platform = ''; sync(); })
     .onchange = e => { state.platform = e.target.value; sync(); };
 
-  mk('store', 'Store', opts(fx.store, 'All stores'), state.store)
+  mk('store', 'Store', opts(fx.store, 'All stores'), state.store, null, null,
+     () => { state.store = ''; state.category = ''; sync(); })
     .onchange = e => { state.store = e.target.value; state.category = ''; sync(); };
 
   /* Category only exists for the three stores that have one. Not rendered at
@@ -1019,14 +1077,16 @@ function buildFilters() {
   if (cats) {
     const list = [{ value: '', label: 'All categories' }].concat(
       cats.map(c => ({ value: c.id, label: (c.parent ? '   ↳ ' : '') + c.label })));
-    const csel = mk('category', 'Category', list, state.category, 'dep');
+    const csel = mk('category', 'Category', list, state.category, 'dep', null,
+                    () => { state.category = ''; sync(); });
     csel.parentNode.classList.add('appears');
     csel.onchange = e => { state.category = e.target.value; sync(); };
   }
 
   const genreOpts = opts(fx.genre, 'Any genre');
   genreOpts.push({ value: '__untagged', label: `Untagged  (${META.counts.untagged.toLocaleString()})` });
-  mk('genre', 'Genre', genreOpts, state.genre)
+  mk('genre', 'Genre', genreOpts, state.genre, null, null,
+     () => { state.genre = ''; sync(); })
     .onchange = e => { state.genre = e.target.value; sync(); };
 
   /* Built from META.statuses, which is tallied off the workbook. Nothing here
@@ -1039,8 +1099,58 @@ function buildFilters() {
   (META.statuses || []).forEach(d =>
     statusOpts.push({ value: d.value, label: `${d.value}  (${d.count.toLocaleString()})` }));
   statusOpts.push({ value: 'backlog', label: 'Priority backlog' });
-  mk('status', 'Status', statusOpts, state.status)
+  mk('status', 'Status', statusOpts, state.status, null, null,
+     () => { state.status = ''; sync(); })
     .onchange = e => { state.status = e.target.value; sync(); };
+
+  /* "Hide" - was a single "hide shovelware" toggle buried in the sort menu,
+     one rule only (untagged games). Now a real multi-select filter sitting
+     with the others: each entry in META.shovelwareRules is its own checkbox,
+     data-driven the same way every other rule in this file grows - an entry
+     in SHOVELWARE_RULES (export_json.py), no code here to touch. */
+  if ((META.shovelwareRules || []).length) {
+    const hg = el('span', 'fgroup');
+    hg.appendChild(el('label', null, 'Hide'));
+    const hwrap = el('span', 'selwrap');
+    const hbtn = el('button', 'hidebtn' + (state.hide.length ? ' active' : ''));
+    hbtn.type = 'button';
+    hbtn.setAttribute('aria-haspopup', 'true');
+    hbtn.setAttribute('aria-expanded', hideMenuOpen ? 'true' : 'false');
+    hbtn.appendChild(el('span', null,
+      state.hide.length ? `${state.hide.length} hidden` : 'None hidden'));
+    hbtn.appendChild(el('span', 'chev', hideMenuOpen ? '▾' : '▸'));
+    hbtn.onclick = e => {
+      e.stopPropagation();
+      hideMenuOpen = !hideMenuOpen;
+      buildFilters();
+    };
+    hwrap.appendChild(hbtn);
+    if (state.hide.length) {
+      const x = el('button', 'fselclear', '×');
+      x.type = 'button';
+      x.setAttribute('aria-label', 'Clear Hide');
+      x.onclick = e => { e.preventDefault(); e.stopPropagation(); state.hide = []; sync(); };
+      hwrap.appendChild(x);
+      hbtn.classList.add('clearable');
+    }
+    if (hideMenuOpen) {
+      const menu = el('div', 'hidemenu');
+      META.shovelwareRules.forEach(r => {
+        const row = el('button', 'sortcheck');
+        const on = state.hide.includes(r.id);
+        row.appendChild(el('span', 'box' + (on ? ' on' : ''), on ? '✓' : ''));
+        row.appendChild(el('span', null, `${r.label}  (${r.count.toLocaleString()})`));
+        row.onclick = () => {
+          state.hide = on ? state.hide.filter(id => id !== r.id) : [...state.hide, r.id];
+          sync();
+        };
+        menu.appendChild(row);
+      });
+      hwrap.appendChild(menu);
+    }
+    hg.appendChild(hwrap);
+    box.appendChild(hg);
+  }
 
   /* ---- the eight axes behind "More filters" ----------------------------
      Kept off the opening screen on purpose: Platform, Store, Genre and Status
@@ -1078,19 +1188,20 @@ function buildFilters() {
          position until v120. */
       if (!facet || !facet.length) return;
       const sel = mk(key, label, opts(facet, 'Any ' + label.toLowerCase()),
-                     state[key], null, panel);
+                     state[key], null, panel, () => { state[key] = ''; sync(); });
       sel.onchange = e => { state[key] = e.target.value; sync(); };
     });
     box.appendChild(panel);
   }
 
   const anyFilter = state.platform || state.store || state.category || state.status ||
-    state.flag || TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
+    state.flag || state.hide.length || TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
   if (anyFilter) {
     const b = el('button', 'clearall', 'Clear filters');
     b.onclick = () => {
       state.platform = state.store = state.category = state.status = '';
       state.flag = '';
+      state.hide = [];
       TAG_AXES.forEach(([k]) => { state[k] = ''; });
       LINK_FILTERS.forEach(([k]) => { state[k] = ''; });
       sync();
@@ -1120,19 +1231,6 @@ function renderSortMenu() {
     };
     m.appendChild(b);
   });
-
-  m.appendChild(el('div', 'sortsep'));
-
-  const rules = (META.shovelwareRules || []).map(r => r.label.toLowerCase()).join(', ');
-  const c = el('button', 'sortcheck');
-  const box = el('span', 'box' + (state.hideShovelware ? ' on' : ''), state.hideShovelware ? '✓' : '');
-  const txt = el('span');
-  txt.append('Hide shovelware');
-  txt.appendChild(el('small', null,
-    `Currently hides ${rules} (${META.counts.untagged.toLocaleString()}). More rules can be added later.`));
-  c.append(box, txt);
-  c.onclick = () => { state.hideShovelware = !state.hideShovelware; renderSortMenu(); compute(); writeUrl(); };
-  m.appendChild(c);
 }
 
 function updateSortLabel() {
@@ -1474,7 +1572,7 @@ function writeUrl() {
   if (state.flag) p.set('flag', state.flag);
   LINK_FILTERS.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.sort !== 'title' || state.dir !== 'asc') p.set('sort', state.sort + ':' + state.dir);
-  if (state.hideShovelware) p.set('hide', 'shovelware');
+  if (state.hide.length) p.set('hide', state.hide.join(','));
   const base = state.view === 'played' ? '#/played' : '#/';
   const next = base + (p.toString() ? '?' + p : '');
   if (next !== location.hash) {
@@ -1527,7 +1625,8 @@ function route() {
   const sp = (params.get('sort') || 'title:asc').split(':');
   state.sort = SORTS[sp[0]] ? sp[0] : 'title';
   state.dir = sp[1] === 'desc' ? 'desc' : 'asc';
-  state.hideShovelware = params.get('hide') === 'shovelware';
+  const validHideIds = new Set((META.shovelwareRules || []).map(r => r.id));
+  state.hide = (params.get('hide') || '').split(',').filter(id => validHideIds.has(id));
   updateSortLabel();
   $('#q').value = state.q;
   $('#q-clear').hidden = !state.q;
@@ -1580,9 +1679,20 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (!m.hidden && !m.contains(e.target) && e.target !== $('#sortbtn')) {
         m.hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
       }
+      /* The Hide dropdown is rebuilt fresh by buildFilters() every time - it
+         has no persistent element to check .contains() against the way
+         #sortmenu does, so this closes it on ANY outside click and lets the
+         button's own onclick (which stopPropagation()s) be the one exception. */
+      if (hideMenuOpen && !e.target.closest('.hidebtn') && !e.target.closest('.hidemenu')) {
+        hideMenuOpen = false;
+        buildFilters();
+      }
     });
     document.addEventListener('keydown', e => {
-      if (e.key === 'Escape') { $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false'); }
+      if (e.key === 'Escape') {
+        $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
+        if (hideMenuOpen) { hideMenuOpen = false; buildFilters(); }
+      }
     });
 
     /* Stats opens over the library. It is a page, not a settings tray, which is
@@ -1621,6 +1731,13 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (state.mode !== 'list') return;
       if (es[0].isIntersecting && RENDERED < RESULTS.length) renderMore();
     }, { rootMargin: '600px' }).observe($('#sentinel'));
+
+    /* Stats opens WITHOUT changing the hash (see the statsbtn handler above),
+       so clicking the wordmark while already sitting on the plain "#/" hash
+       - the common case, opening stats straight from the Library tab - fires
+       no hashchange event at all and route() never runs. Close stats here
+       explicitly rather than relying on the link's own navigation to do it. */
+    $('.wordmark').addEventListener('click', () => { if (!$('#stats').hidden) { closeStats(); sync(); } });
 
     window.addEventListener('hashchange', () => { if (!writing) route(); });
     route();
