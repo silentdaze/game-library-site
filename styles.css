@@ -119,27 +119,37 @@ a{color:var(--blue)}
 }
 .fselclear:hover{color:var(--coral); background:var(--panel-3)}
 
-/* "Hide" - a multi-select dropdown, so it's a real button + panel rather than
-   a <select> (which can't hold checkboxes). Styled to match the other filter
-   controls it now sits beside, having moved out of the sort menu. */
+/* "Hide" - sits left of the sort button in the result bar (moved out of the
+   main filter row and out of the sort menu, 2026-09-08), so it is styled to
+   match .sortbtn/.sortmenu right next to it rather than the bulkier filter
+   selects. A multi-select needs a real button + panel, never a <select>
+   (which can't hold checkboxes). */
+.hidewrap{position:relative}
 .hidebtn{
-  display:flex; align-items:center; gap:8px; font-family:var(--ui); font-size:13px;
-  color:var(--ink); font-weight:600; border:1.5px solid var(--line-2);
-  background:var(--panel); border-radius:10px; padding:9px 11px; min-width:140px;
-  cursor:pointer; justify-content:space-between;
+  display:flex; align-items:center; gap:7px; font-family:var(--ui); font-size:12px;
+  color:var(--ink-2); background:var(--panel); border:1px solid var(--line-2);
+  border-radius:9px; padding:6px 11px; cursor:pointer;
 }
+.hidebtn:hover{border-color:var(--blue-mid); color:var(--blue)}
 .hidebtn .chev{font-size:10px; color:var(--ink-4)}
-.hidebtn.active{border-color:var(--blue-mid); background-color:var(--blue-soft); color:var(--blue)}
+.hidebtn.active, .hidebtn[aria-expanded="true"]{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}
 .hidebtn.active .chev{color:var(--blue)}
-.hidebtn.clearable{padding-right:36px}
+.hidebtn.clearable{padding-right:28px}
+.hidewrap .fselclear{right:2px}
 .hidemenu{
-  /* Right-edge-anchored, not left: the Hide control can land anywhere in a
-     wrapped filter row (it's often last), and a menu opening off the right
-     side of the viewport is what "Hidden Object Games" was clipping to on a
-     375px-wide screen before this. */
-  position:absolute; right:0; top:calc(100% + 7px); z-index:20; width:260px;
+  /* Left-edge-anchored, extending rightward: Hide is the LEFTMOST control in
+     .bar-right (Hide, then Sort, then the view toggle), so there is always at
+     least that much room to its right - on mobile .bar-right wraps onto its
+     own line starting at the left edge, and right-anchoring (this control's
+     first home, the main filter row, where it was the LAST item) opened the
+     menu off the LEFT side of a 375px screen instead. */
+  position:absolute; left:0; top:calc(100% + 7px); z-index:20; width:260px;
   background:var(--panel); border:1px solid var(--line-2); border-radius:var(--r);
-  box-shadow:var(--sh-lg); padding:7px;
+  box-shadow:var(--sh-lg); padding:9px;
+}
+.hidemenu h6{
+  margin:4px 6px 7px; font-family:var(--mono); font-size:9.5px; letter-spacing:.13em;
+  text-transform:uppercase; color:var(--ink-4); font-weight:400;
 }
 
 /* "More filters" — the eight tag axes that are not on the opening screen.

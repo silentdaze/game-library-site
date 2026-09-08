@@ -147,10 +147,6 @@ function panelPref(v) {
 }
 let panelOpen = panelPref();
 
-/* Whether the Hide dropdown (below) is expanded. Not remembered across visits
-   like `panelOpen` - it is a momentary control, not a layout preference. */
-let hideMenuOpen = false;
-
 /* Which set the Stats page's ranked lists describe: 'played' or 'logged'.
    Played is the default - it is the more interesting question, and the one the
    whole-library figures at the top of the page do not answer. */
@@ -419,7 +415,17 @@ const STATUS_GLOSS = {
 
 function passes(g) {
   if (state.platform && !(g.platformGroups || []).includes(state.platform)) return false;
-  if (state.store && !(g.stores || []).includes(state.store)) return false;
+  /* "Xbox" is widened to also match a game found ONLY through
+     categories.xbox (export_json.py) - most never-owned Game Pass rows never
+     carry "Xbox" in `stores` at all (that means a purchase, and Subscription
+     is the honest token for them), but they still belong under Store: Xbox
+     with a "Game Pass Only" category. Every other store stays a plain
+     membership test. */
+  if (state.store) {
+    const inStores = (g.stores || []).includes(state.store);
+    const xboxByCategory = state.store === 'Xbox' && (g.categories || {}).xbox;
+    if (!inStores && !xboxByCategory) return false;
+  }
   if (state.category) {
     const key = { 'itch.io': 'itch', 'Xbox': 'xbox', 'Nintendo eShop': 'eshop' }[state.store];
     const cats = (g.categories || {})[key] || [];
@@ -845,8 +851,14 @@ function renderDetail(id) {
   const st = el('div', 'statusline');
   const sl = statusLine(g);
   if (sl) { const p = el('span', 'spill ' + sl.cls); p.appendChild(el('span', 'dot')); p.append(sl.text); st.appendChild(p); }
-  st.appendChild(el('span', 'spill' + (g.owned ? '' : ' no'), g.owned ? 'Owned' : 'Not owned'));
-  if (g.access) st.appendChild(el('span', 'spill', g.access));
+  const ownedText = g.owned ? 'Owned' : 'Not owned';
+  st.appendChild(el('span', 'spill' + (g.owned ? '' : ' no'), ownedText));
+  /* `Access` is the workbook's own richer answer (Playable, "Requires
+     resubscribe (GWG)", "No access - service shut down") and earns a second
+     pill - except when it's just "Not owned" again, word for word, which
+     happens whenever nothing more specific was on record. `Yakuza 0` showed
+     "Not owned" twice for exactly this reason. */
+  if (g.access && g.access !== ownedText) st.appendChild(el('span', 'spill', g.access));
   dt.appendChild(st);
   dt.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
   head.appendChild(dt);
@@ -888,7 +900,21 @@ function renderDetail(id) {
   if (g.stores && g.stores.length) {
     const d = el('span'); d.style.display = 'contents';
     const wrapper = el('span'); wrapper.style.display = 'flex'; wrapper.style.flexWrap = 'wrap'; wrapper.style.gap = '6px';
-    g.stores.forEach(s => { const a = el('a', 'tagl', s); a.href = '#/?store=' + encodeURIComponent(s); wrapper.appendChild(a); });
+    /* "Xbox" reads as a purchase everywhere else on this page, and for a pure
+       GWG freebie (no separate real purchase - see the "owned" precedence in
+       export_json.py) it never was one. Shown as "Subscription" instead,
+       deep-linked straight to the Games With Gold category rather than the
+       plain Store: Xbox link every other pill gets. A game that ALSO has a
+       real Xbox purchase (the "owned" category) keeps the honest "Xbox" pill
+       - this only fires for the gwg-only case. */
+    const xboxCats = (g.categories || {}).xbox || [];
+    const gwgOnly = xboxCats.length === 1 && xboxCats[0] === 'gwg';
+    g.stores.forEach(s => {
+      const isGwgXbox = s === 'Xbox' && gwgOnly;
+      const a = el('a', 'tagl', isGwgXbox ? 'Subscription' : s);
+      a.href = isGwgXbox ? '#/?store=Xbox&category=gwg' : '#/?store=' + encodeURIComponent(s);
+      wrapper.appendChild(a);
+    });
     kv(dl1, 'Stores', wrapper);
   }
   /* Complete Edition On - workbook column 43, added at v94 for exactly one
@@ -918,6 +944,10 @@ function renderDetail(id) {
     kv(dl1, 'Complete edition', w);
   }
   if (g.ownership && g.ownership.length) kv(dl1, 'Ownership', el('span', 'plain', g.ownership.join(' · ')));
+  /* The one row (so far) where "Game Pass Only" undersells it: a real Xbox
+     purchase exists, just not of the base game. Derived in export_json.py
+     from the DLC's own store suffix - see xbox_note there. */
+  if (g.xboxNote) kv(dl1, 'Note', el('span', 'plain', g.xboxNote));
   if (g.playedOn && g.playedOn.length) kv(dl1, 'Played on', el('span', 'plain mono', g.playedOn.map(simplifyPlatform).join(' · ')));
   /* Finished / stopped / played - three meanings, so the label is looked up,
      never assumed. Handoff 9.13. */
@@ -1103,55 +1133,6 @@ function buildFilters() {
      () => { state.status = ''; sync(); })
     .onchange = e => { state.status = e.target.value; sync(); };
 
-  /* "Hide" - was a single "hide shovelware" toggle buried in the sort menu,
-     one rule only (untagged games). Now a real multi-select filter sitting
-     with the others: each entry in META.shovelwareRules is its own checkbox,
-     data-driven the same way every other rule in this file grows - an entry
-     in SHOVELWARE_RULES (export_json.py), no code here to touch. */
-  if ((META.shovelwareRules || []).length) {
-    const hg = el('span', 'fgroup');
-    hg.appendChild(el('label', null, 'Hide'));
-    const hwrap = el('span', 'selwrap');
-    const hbtn = el('button', 'hidebtn' + (state.hide.length ? ' active' : ''));
-    hbtn.type = 'button';
-    hbtn.setAttribute('aria-haspopup', 'true');
-    hbtn.setAttribute('aria-expanded', hideMenuOpen ? 'true' : 'false');
-    hbtn.appendChild(el('span', null,
-      state.hide.length ? `${state.hide.length} hidden` : 'None hidden'));
-    hbtn.appendChild(el('span', 'chev', hideMenuOpen ? '▾' : '▸'));
-    hbtn.onclick = e => {
-      e.stopPropagation();
-      hideMenuOpen = !hideMenuOpen;
-      buildFilters();
-    };
-    hwrap.appendChild(hbtn);
-    if (state.hide.length) {
-      const x = el('button', 'fselclear', '×');
-      x.type = 'button';
-      x.setAttribute('aria-label', 'Clear Hide');
-      x.onclick = e => { e.preventDefault(); e.stopPropagation(); state.hide = []; sync(); };
-      hwrap.appendChild(x);
-      hbtn.classList.add('clearable');
-    }
-    if (hideMenuOpen) {
-      const menu = el('div', 'hidemenu');
-      META.shovelwareRules.forEach(r => {
-        const row = el('button', 'sortcheck');
-        const on = state.hide.includes(r.id);
-        row.appendChild(el('span', 'box' + (on ? ' on' : ''), on ? '✓' : ''));
-        row.appendChild(el('span', null, `${r.label}  (${r.count.toLocaleString()})`));
-        row.onclick = () => {
-          state.hide = on ? state.hide.filter(id => id !== r.id) : [...state.hide, r.id];
-          sync();
-        };
-        menu.appendChild(row);
-      });
-      hwrap.appendChild(menu);
-    }
-    hg.appendChild(hwrap);
-    box.appendChild(hg);
-  }
-
   /* ---- the eight axes behind "More filters" ----------------------------
      Kept off the opening screen on purpose: Platform, Store, Genre and Status
      answer almost every question, and nine dropdowns in a row is a wall.
@@ -1204,6 +1185,8 @@ function buildFilters() {
       state.hide = [];
       TAG_AXES.forEach(([k]) => { state[k] = ''; });
       LINK_FILTERS.forEach(([k]) => { state[k] = ''; });
+      updateHideLabel();
+      if (!$('#hidemenu').hidden) renderHideMenu();
       sync();
     };
     box.appendChild(b);
@@ -1236,6 +1219,43 @@ function renderSortMenu() {
 function updateSortLabel() {
   const cfg = SORTS[state.sort];
   $('#sortlabel').textContent = state.dir === 'asc' ? cfg.label : cfg.rev;
+}
+
+/* ---------------------------------------------------------------- hide UI */
+
+/* Each entry is one of META.shovelwareRules (export_json.py) - Demos, Hidden
+   Object Games, itch.io Highlights, itch.io Bundles as of 2026-09-08. Data-
+   driven the same way the sort menu's own list is: adding a fifth rule is an
+   entry in SHOVELWARE_RULES, no code here to touch. */
+function renderHideMenu() {
+  const m = $('#hidemenu');
+  m.replaceChildren();
+  m.appendChild(el('h6', null, 'Hide'));
+  (META.shovelwareRules || []).forEach(r => {
+    const row = el('button', 'sortcheck');
+    const on = state.hide.includes(r.id);
+    row.appendChild(el('span', 'box' + (on ? ' on' : ''), on ? '✓' : ''));
+    row.appendChild(el('span', null, `${r.label}  (${r.count.toLocaleString()})`));
+    row.onclick = e => {
+      /* #hidemenu is a persistent element (static markup, unlike the sort
+         menu's own options this mirrors); renderHideMenu() replaces THIS
+         button as one of its children. Without stopPropagation the click
+         still bubbles to document after that swap, and by then e.target is
+         detached - m.contains(e.target) reads false and the outside-click
+         handler below closes the menu on every single checkbox click. */
+      e.stopPropagation();
+      state.hide = on ? state.hide.filter(id => id !== r.id) : [...state.hide, r.id];
+      renderHideMenu(); updateHideLabel(); sync();
+    };
+    m.appendChild(row);
+  });
+}
+
+function updateHideLabel() {
+  $('#hidelabel').textContent = state.hide.length ? `${state.hide.length} hidden` : 'None hidden';
+  $('#hidebtn').classList.toggle('active', state.hide.length > 0);
+  $('#hidebtn').classList.toggle('clearable', state.hide.length > 0);
+  $('#hideclear').hidden = !state.hide.length;
 }
 
 /* ---------------------------------------------------------------- health */
@@ -1628,6 +1648,7 @@ function route() {
   const validHideIds = new Set((META.shovelwareRules || []).map(r => r.id));
   state.hide = (params.get('hide') || '').split(',').filter(id => validHideIds.has(id));
   updateSortLabel();
+  updateHideLabel();
   $('#q').value = state.q;
   $('#q-clear').hidden = !state.q;
 
@@ -1674,24 +1695,38 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       $('#sortbtn').setAttribute('aria-expanded', String(!m.hidden));
       if (!m.hidden) renderSortMenu();
     };
+    /* Left of the sort button, Justin's call - was in the main filter row,
+       moved 2026-09-08. Static markup + a persistent #hidemenu, same pattern
+       as #sortbtn/#sortmenu right next to it, rather than the rebuilt-by-
+       buildFilters() version this replaced. */
+    $('#hidebtn').onclick = e => {
+      e.stopPropagation();
+      const m = $('#hidemenu');
+      m.hidden = !m.hidden;
+      $('#hidebtn').setAttribute('aria-expanded', String(!m.hidden));
+      if (!m.hidden) renderHideMenu();
+    };
+    $('#hideclear').onclick = e => {
+      e.preventDefault(); e.stopPropagation();
+      state.hide = [];
+      updateHideLabel();
+      if (!$('#hidemenu').hidden) renderHideMenu();
+      sync();
+    };
     document.addEventListener('click', e => {
       const m = $('#sortmenu');
       if (!m.hidden && !m.contains(e.target) && e.target !== $('#sortbtn')) {
         m.hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
       }
-      /* The Hide dropdown is rebuilt fresh by buildFilters() every time - it
-         has no persistent element to check .contains() against the way
-         #sortmenu does, so this closes it on ANY outside click and lets the
-         button's own onclick (which stopPropagation()s) be the one exception. */
-      if (hideMenuOpen && !e.target.closest('.hidebtn') && !e.target.closest('.hidemenu')) {
-        hideMenuOpen = false;
-        buildFilters();
+      const hm = $('#hidemenu');
+      if (!hm.hidden && !hm.contains(e.target) && e.target !== $('#hidebtn') && !$('#hidebtn').contains(e.target)) {
+        hm.hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
       }
     });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
-        if (hideMenuOpen) { hideMenuOpen = false; buildFilters(); }
+        $('#hidemenu').hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
       }
     });
 
