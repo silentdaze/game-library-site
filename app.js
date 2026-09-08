@@ -191,7 +191,7 @@ function accessNote(g) {
     if (own.includes('Subscription')) return { kind: 'whisper', text: 'also on ' + (svc || 'a subscription') };
     return null;
   }
-  if (own.includes('GWG')) return { kind: 'flag', text: 'requires resubscribe' };
+  if (own.includes('GWG')) return { kind: 'flag', text: 'not owned — GWG' };
   if (own.some(t => t.startsWith('Subscription'))) {
     return { kind: 'flag', text: svc ? 'not owned — ' + svc : 'not owned — subscription' };
   }
