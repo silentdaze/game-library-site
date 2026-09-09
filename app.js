@@ -1113,7 +1113,19 @@ function buildFilters() {
     csel.onchange = e => { state.category = e.target.value; sync(); };
   }
 
-  const genreOpts = opts(fx.genre, 'Any genre');
+  /* `Unknown` is a real, selectable Genre value (an itch.io bundle row whose
+     description gave no clean genre signal) rather than a hole in the data -
+     that's what makes it different from `__untagged` below. But it's also
+     the single largest Genre value in the sheet, so sorted by count like
+     every other value it would land at the TOP of the dropdown, ahead of
+     every real genre. Pulled out and appended after the real vocabulary
+     instead, with a label that says what it means. */
+  const genreOpts = opts(fx.genre.filter(f => f.value !== 'Unknown'), 'Any genre');
+  const unknownGenre = fx.genre.find(f => f.value === 'Unknown');
+  if (unknownGenre) {
+    genreOpts.push({ value: 'Unknown',
+      label: `Unknown (itch.io bundle, no genre signal)  (${unknownGenre.count.toLocaleString()})` });
+  }
   genreOpts.push({ value: '__untagged', label: `Untagged  (${META.counts.untagged.toLocaleString()})` });
   mk('genre', 'Genre', genreOpts, state.genre, null, null,
      () => { state.genre = ''; sync(); })
@@ -1427,7 +1439,11 @@ function renderStats() {
 
     const pair = () => { const d = el('div', 'spair'); scopeWrap.appendChild(d); return d; };
 
-    const genres = tallyOf('genre').filter(([v]) => v !== 'Unverified');
+    /* `Unknown` (itch.io bundle rows with no genre signal) is real and
+       filterable, but it isn't a genre anyone means when they ask "what do
+       I play most" - and at 648 rows it would otherwise top this list
+       outright. Excluded here the same way `Unverified` already is. */
+    const genres = tallyOf('genre').filter(([v]) => v !== 'Unverified' && v !== 'Unknown');
     const series = tallyOf('series');
     const r1 = pair();
     if (genres.length) {
