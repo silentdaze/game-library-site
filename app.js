@@ -1143,7 +1143,10 @@ function buildFilters() {
 
     const panel = el('div', 'dpanel');
     panel.hidden = true;
-    const head = el('div', 'dhead');
+    /* `dphead`, not `dhead` - `dhead` is already the detail page's own
+       cover+title row and the class collision was silently eating this
+       header's padding (see the CSS comment on `.dphead`). */
+    const head = el('div', 'dphead');
     head.appendChild(el('h6', null, label));
     let order = (o.sortable === false) ? 'count' : (optSort[key] || 'count');
     if (o.sortable !== false) {
