@@ -1337,19 +1337,20 @@ function buildFilters() {
     box.appendChild(panel);
   }
 
+  /* Hide Shovelware is deliberately NOT part of this - Justin's ask,
+     2026-09-10. It is a display preference, not a filter: it should never
+     make "Clear filters" appear on its own, and "Clear filters" should never
+     touch it. Whatever is checked stays checked, on or off, no matter what
+     else on this bar gets cleared. */
   const anyFilter = state.platform || state.store || state.category || state.status ||
-    state.flag || (state.hideOn && state.hide.length) ||
-    TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
+    state.flag || TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
   if (anyFilter) {
     const b = el('button', 'clearall', 'Clear filters');
     b.onclick = () => {
       state.platform = state.store = state.category = state.status = '';
       state.flag = '';
-      state.hide = [];
       TAG_AXES.forEach(([k]) => { state[k] = ''; });
       LINK_FILTERS.forEach(([k]) => { state[k] = ''; });
-      updateHideLabel();
-      if (!$('#hidemenu').hidden) renderHideMenu();
       sync();
     };
     box.appendChild(b);
