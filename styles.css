@@ -372,7 +372,12 @@ a{color:var(--blue)}
 .hnames li a:hover{color:var(--blue); border-color:var(--blue-mid)}
 .settings{margin-top:15px; display:flex; flex-wrap:wrap; gap:9px}
 .setrow{display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink-2); border:1px solid var(--line); background:var(--panel); border-radius:var(--r); padding:9px 13px; cursor:pointer; font-family:var(--ui)}
-.tgl{width:30px; height:17px; border-radius:10px; background:var(--line-2); position:relative; flex:none; transition:background .15s}
+/* `display:inline-block` is load-bearing: `.tgl` is a bare `<span>`, and
+   `width`/`height` do nothing on an inline element - it rendered full size
+   only where a flex parent happened to blockify it for free (`.setrow`). Not
+   true of `.tglbtn` (a plain button, not flex), where the switch collapsed to
+   0x0 and vanished until this was added. */
+.tgl{display:inline-block; width:30px; height:17px; border-radius:10px; background:var(--line-2); position:relative; flex:none; transition:background .15s}
 .tgl.on{background:var(--blue-mid)}
 .tgl i{position:absolute; top:2.5px; left:2.5px; width:12px; height:12px; border-radius:50%; background:#fff; display:block; box-shadow:0 1px 2px rgba(0,0,0,.2); transition:left .15s}
 .tgl.on i{left:15px}
