@@ -142,6 +142,12 @@ a{color:var(--blue)}
   color:var(--ink-2); background:var(--panel); border:1px solid var(--line-2);
   border-radius:9px; padding:6px 11px; cursor:pointer;
 }
+/* `display:flex` above and the `hidden` attribute are the same specificity,
+   so without this the attribute alone never actually hid the button - JS set
+   it, the box stayed on screen regardless. Same trap the category dropdown
+   right next to it avoids only by never being built at all when there's
+   nothing for it to show. */
+.hidebtn[hidden]{display:none}
 .hidebtn:hover{border-color:var(--blue-mid); color:var(--blue)}
 .hidebtn .chev{font-size:10px; color:var(--ink-4)}
 .hidebtn.active, .hidebtn[aria-expanded="true"]{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}

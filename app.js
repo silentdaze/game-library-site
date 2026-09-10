@@ -116,11 +116,13 @@ const EXTRA_AXES = TAG_AXES.filter(([k]) => !PRIMARY_AXES.includes(k));
    is a relationship rather than a description of a game. */
 const LINK_FILTERS = [['shelf', 'shelf'], ['series', 'series']];
 
-/* The categories "Hide Shovelware" hides out of the box, before anyone has
-   touched the dropdown - the four junk categories the toggle is named for.
-   `unplayed-free-switch` (added 2026-09-10) is a real category, not junk, so
-   it ships unchecked: available to hide, never hidden by default. */
-const DEFAULT_HIDE = ['demos', 'hidden-object', 'itch-highlights', 'itch-bundles'];
+/* Every category "Hide Shovelware" hides out of the box, before anyone has
+   touched the dropdown - all of META.shovelwareRules, derived rather than
+   listed by id, so a rule added in export_json.py (`unplayed-free-switch`
+   joined at v167+1) ships already checked instead of needing a second edit
+   here to match. Empty until the payload has loaded; nothing reads it before
+   then. */
+const defaultHideIds = () => (META && META.shovelwareRules || []).map(r => r.id);
 
 const state = {
   q: '', platform: '', store: '', category: '', status: '',
@@ -129,8 +131,9 @@ const state = {
      single boolean: each rule is its own real category, and more than one can
      be hidden at once. Whether this list actually APPLIES is a separate
      question - see `hideOn` below - so switching the pill off and back on
-     never loses what was checked. */
-  hide: [...DEFAULT_HIDE],
+     never loses what was checked. Starts empty and is set for real in
+     route()'s first pass, once defaultHideIds() has something to return. */
+  hide: [],
   /* The pill toggle. On by default - Justin's ask, 2026-09-10 - so a fresh
      visit already hides the junk categories rather than requiring a first
      click to get there. */
@@ -1672,13 +1675,14 @@ function writeUrl() {
   if (state.flag) p.set('flag', state.flag);
   LINK_FILTERS.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.sort !== 'title' || state.dir !== 'asc') p.set('sort', state.sort + ':' + state.dir);
-  /* Only written when it differs from DEFAULT_HIDE, same convention as every
-     other filter here - a URL that matches the default state stays clean.
-     An explicit empty list ("hide=", nothing checked) still has to round-trip
-     as different from "no hide param at all" (the default four), so it is
-     written whenever the set isn't exactly the default - including empty. */
-  const hideIsDefault = state.hide.length === DEFAULT_HIDE.length &&
-    DEFAULT_HIDE.every(id => state.hide.includes(id));
+  /* Only written when it differs from defaultHideIds(), same convention as
+     every other filter here - a URL that matches the default state stays
+     clean. An explicit empty list ("hide=", nothing checked) still has to
+     round-trip as different from "no hide param at all" (every rule), so it
+     is written whenever the set isn't exactly the default - including empty. */
+  const defHide = defaultHideIds();
+  const hideIsDefault = state.hide.length === defHide.length &&
+    defHide.every(id => state.hide.includes(id));
   if (!hideIsDefault) p.set('hide', state.hide.join(','));
   if (!state.hideOn) p.set('hideoff', '1');
   const base = state.view === 'played' ? '#/played' : '#/';
@@ -1745,7 +1749,7 @@ function route() {
   const validHideIds = new Set((META.shovelwareRules || []).map(r => r.id));
   const hideParam = params.get('hide');
   state.hide = hideParam == null
-    ? DEFAULT_HIDE.filter(id => validHideIds.has(id))
+    ? defaultHideIds()
     : hideParam.split(',').filter(id => validHideIds.has(id));
   state.hideOn = params.get('hideoff') !== '1';
   updateSortLabel();
