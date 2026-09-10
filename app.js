@@ -116,14 +116,25 @@ const EXTRA_AXES = TAG_AXES.filter(([k]) => !PRIMARY_AXES.includes(k));
    is a relationship rather than a description of a game. */
 const LINK_FILTERS = [['shelf', 'shelf'], ['series', 'series']];
 
+/* The categories "Hide Shovelware" hides out of the box, before anyone has
+   touched the dropdown - the four junk categories the toggle is named for.
+   `unplayed-free-switch` (added 2026-09-10) is a real category, not junk, so
+   it ships unchecked: available to hide, never hidden by default. */
+const DEFAULT_HIDE = ['demos', 'hidden-object', 'itch-highlights', 'itch-bundles'];
+
 const state = {
   q: '', platform: '', store: '', category: '', status: '',
   flag: '', shelf: '', series: '',
-  /* Ids from META.shovelwareRules currently checked to hide - Demos, Hidden
-     Object Games, itch.io Highlights, itch.io Bundles as of 2026-09-08.
-     A list, not a single "hide shovelware" boolean: each rule is its own
-     real category now, and more than one can be hidden at once. */
-  hide: [],
+  /* Ids from META.shovelwareRules currently checked to hide. A list, not a
+     single boolean: each rule is its own real category, and more than one can
+     be hidden at once. Whether this list actually APPLIES is a separate
+     question - see `hideOn` below - so switching the pill off and back on
+     never loses what was checked. */
+  hide: [...DEFAULT_HIDE],
+  /* The pill toggle. On by default - Justin's ask, 2026-09-10 - so a fresh
+     visit already hides the junk categories rather than requiring a first
+     click to get there. */
+  hideOn: true,
   view: 'library', sort: 'title', dir: 'asc',
   /* 'list' or 'detail'. The infinite-scroll observer must only ever append
      rows while a list is on screen. */
@@ -146,6 +157,21 @@ function panelPref(v) {
   return v;
 }
 let panelOpen = panelPref();
+
+/* Whether dropdown options (Platform, Genre, Status, the More-filters axes)
+   list their most common value first - the site's own default and behaviour
+   before this - or alphabetically. A browser preference, not URL state: it
+   changes how a choice is FOUND, never which choice is active, so a shared
+   link should not carry it. */
+const OPTSORT_KEY = 'gl.filters.optsort';
+function optSortPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(OPTSORT_KEY) === 'alpha';
+    localStorage.setItem(OPTSORT_KEY, v ? 'alpha' : 'count');
+  } catch (e) { /* no storage: dropdowns just keep the default order */ }
+  return v;
+}
+let optSortAlpha = optSortPref();
 
 /* Which set the Stats page's ranked lists describe: 'played' or 'logged'.
    Played is the default - it is the more interesting question, and the one the
@@ -455,7 +481,7 @@ function passes(g) {
   for (const [key] of LINK_FILTERS) {
     if (state[key] && !(g[key] || []).includes(state[key])) return false;
   }
-  if (state.hide.length && (g.shovelware || []).some(id => state.hide.includes(id))) return false;
+  if (state.hideOn && state.hide.length && (g.shovelware || []).some(id => state.hide.includes(id))) return false;
   /* The Played view is every game with ANY status other than `Unplayed`.
      Derived, never a list of the statuses that happen to exist today - a
      seventh value joins it on its own, which is the whole lesson of the
@@ -810,7 +836,7 @@ function renderDetail(id) {
       });
       e.appendChild(list);
     }
-    const back = el('a', null, '\u2190 Back to the library'); back.href = '#/';
+    const back = el('a', null, '\u2190 Back to the library'); back.href = lastListUrl;
     e.appendChild(back);
     view.appendChild(e);
     return;
@@ -818,7 +844,10 @@ function renderDetail(id) {
   document.title = g.title + ' — Game Library';
 
   const crumb = el('div', 'crumb');
-  const back = el('a', null, '← Library'); back.href = '#/';
+  /* The last library URL actually visited, filters and search intact - never
+     a hardcoded '#/'. Justin's ask, 2026-09-10: this link used to reset to the
+     bare homepage no matter what was filtered when you left it. */
+  const back = el('a', null, '← Library'); back.href = lastListUrl;
   crumb.appendChild(back);
   view.appendChild(crumb);
 
@@ -1090,8 +1119,16 @@ function buildFilters() {
   };
 
   const fx = META.facets;
+  /* Alphabetical is a straight string sort over whatever the facet already
+     is - it never changes WHICH values are offered, only the order they list
+     in, so applying it here rather than inside each individual dropdown's own
+     construction covers Platform, Store, Genre and all eight More-filters
+     axes from one place. */
+  const orderOpts = arr => optSortAlpha
+    ? [...arr].sort((a, b) => a.value.localeCompare(b.value, 'en', { numeric: true }))
+    : arr;
   const opts = (arr, all) => [{ value: '', label: all }].concat(
-    arr.map(f => ({ value: f.value, label: `${f.value}  (${f.count.toLocaleString()})` })));
+    orderOpts(arr).map(f => ({ value: f.value, label: `${f.value}  (${f.count.toLocaleString()})` })));
 
   mk('platform', 'Platform', opts(fx.platform, 'Any platform'), state.platform, null, null,
      () => { state.platform = ''; sync(); })
@@ -1126,7 +1163,12 @@ function buildFilters() {
     genreOpts.push({ value: 'Unknown',
       label: `Unknown (itch.io bundle, no genre signal)  (${unknownGenre.count.toLocaleString()})` });
   }
-  genreOpts.push({ value: '__untagged', label: `Untagged  (${META.counts.untagged.toLocaleString()})` });
+  /* A value with nobody in it is not a choice, it's clutter - `Untagged` sat
+     at (0) once the chat cleared the last gap, and a dropdown option that can
+     never return a result is worse than no option at all. */
+  if (META.counts.untagged) {
+    genreOpts.push({ value: '__untagged', label: `Untagged  (${META.counts.untagged.toLocaleString()})` });
+  }
   mk('genre', 'Genre', genreOpts, state.genre, null, null,
      () => { state.genre = ''; sync(); })
     .onchange = e => { state.genre = e.target.value; sync(); };
@@ -1134,11 +1176,15 @@ function buildFilters() {
   /* Built from META.statuses, which is tallied off the workbook. Nothing here
      names a status, so `Sampled` appeared at v73 without a code change and a
      sixth value would too - handoff 3.3b. Values are shown with the workbook's
-     own wording; the controlled vocabulary ships as-is (handoff 16). */
+     own wording; the controlled vocabulary ships as-is (handoff 16).
+     `played` and `backlog` are pinned first/last rather than sorted with the
+     rest - they are not workbook statuses, they are the site's own derived
+     views, and alphabetising them into the middle of the list would separate
+     them from what they actually mean. */
   const c = META.counts;
   const statusOpts = [{ value: '', label: 'Any status' }];
   if (c.played) statusOpts.push({ value: 'played', label: `Played  (${c.played.toLocaleString()})` });
-  (META.statuses || []).forEach(d =>
+  orderOpts(META.statuses || []).forEach(d =>
     statusOpts.push({ value: d.value, label: `${d.value}  (${d.count.toLocaleString()})` }));
   statusOpts.push({ value: 'backlog', label: 'Priority backlog' });
   mk('status', 'Status', statusOpts, state.status, null, null,
@@ -1172,6 +1218,17 @@ function buildFilters() {
   };
   box.appendChild(more);
 
+  /* One switch for how every dropdown above lists its choices - most common
+     first (the site's own long-standing default) or A-Z. Reuses `.morebtn`'s
+     look rather than earning a new style, since it is the same kind of small
+     toggle sitting on the same row. */
+  const optsort = el('button', 'morebtn' + (optSortAlpha ? ' on' : ''));
+  optsort.type = 'button';
+  optsort.title = 'Order the choices in these dropdowns by how common they are, or alphabetically';
+  optsort.append(optSortAlpha ? 'A–Z' : 'Most common');
+  optsort.onclick = () => { optSortAlpha = optSortPref(!optSortAlpha); buildFilters(); };
+  box.appendChild(optsort);
+
   if (open) {
     const panel = el('div', 'morepanel');
     EXTRA_AXES.forEach(([key, label]) => {
@@ -1188,7 +1245,8 @@ function buildFilters() {
   }
 
   const anyFilter = state.platform || state.store || state.category || state.status ||
-    state.flag || state.hide.length || TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
+    state.flag || (state.hideOn && state.hide.length) ||
+    TAG_AXES.some(([k]) => state[k]) || LINK_FILTERS.some(([k]) => state[k]);
   if (anyFilter) {
     const b = el('button', 'clearall', 'Clear filters');
     b.onclick = () => {
@@ -1264,10 +1322,16 @@ function renderHideMenu() {
 }
 
 function updateHideLabel() {
-  $('#hidelabel').textContent = state.hide.length ? `${state.hide.length} hidden` : 'None hidden';
+  const pill = $('#hidetoggle');
+  pill.classList.toggle('on', state.hideOn);
+  pill.querySelector('.tgl').classList.toggle('on', state.hideOn);
+  pill.setAttribute('aria-checked', String(state.hideOn));
+  /* The category dropdown only exists to say WHICH categories the pill
+     applies to - with the pill off there is nothing for it to do, so it
+     disappears rather than sitting there disabled. */
+  $('#hidebtn').hidden = !state.hideOn;
+  $('#hidelabel').textContent = state.hide.length ? `${state.hide.length} hidden` : 'Choose categories';
   $('#hidebtn').classList.toggle('active', state.hide.length > 0);
-  $('#hidebtn').classList.toggle('clearable', state.hide.length > 0);
-  $('#hideclear').hidden = !state.hide.length;
 }
 
 /* ---------------------------------------------------------------- health */
@@ -1608,15 +1672,32 @@ function writeUrl() {
   if (state.flag) p.set('flag', state.flag);
   LINK_FILTERS.forEach(([k]) => { if (state[k]) p.set(k, state[k]); });
   if (state.sort !== 'title' || state.dir !== 'asc') p.set('sort', state.sort + ':' + state.dir);
-  if (state.hide.length) p.set('hide', state.hide.join(','));
+  /* Only written when it differs from DEFAULT_HIDE, same convention as every
+     other filter here - a URL that matches the default state stays clean.
+     An explicit empty list ("hide=", nothing checked) still has to round-trip
+     as different from "no hide param at all" (the default four), so it is
+     written whenever the set isn't exactly the default - including empty. */
+  const hideIsDefault = state.hide.length === DEFAULT_HIDE.length &&
+    DEFAULT_HIDE.every(id => state.hide.includes(id));
+  if (!hideIsDefault) p.set('hide', state.hide.join(','));
+  if (!state.hideOn) p.set('hideoff', '1');
   const base = state.view === 'played' ? '#/played' : '#/';
   const next = base + (p.toString() ? '?' + p : '');
+  /* The detail page's "← Library" link reads this instead of a hardcoded
+     '#/'. Set on every call rather than only inside route(): typing a search
+     or touching a filter calls writeUrl() straight from its own handler
+     without ever going through route() (that is the whole point of
+     replaceState here - it keeps the address bar in sync without
+     re-routing), so route() alone would miss most of what a reader actually
+     had on screen before clicking into a game. */
+  lastListUrl = next;
   if (next !== location.hash) {
     writing = true;
     history.replaceState(null, '', next);
     writing = false;
   }
 }
+let lastListUrl = '#/';
 
 function route() {
   const hash = location.hash.replace(/^#/, '') || '/';
@@ -1662,7 +1743,11 @@ function route() {
   state.sort = SORTS[sp[0]] ? sp[0] : 'title';
   state.dir = sp[1] === 'desc' ? 'desc' : 'asc';
   const validHideIds = new Set((META.shovelwareRules || []).map(r => r.id));
-  state.hide = (params.get('hide') || '').split(',').filter(id => validHideIds.has(id));
+  const hideParam = params.get('hide');
+  state.hide = hideParam == null
+    ? DEFAULT_HIDE.filter(id => validHideIds.has(id))
+    : hideParam.split(',').filter(id => validHideIds.has(id));
+  state.hideOn = params.get('hideoff') !== '1';
   updateSortLabel();
   updateHideLabel();
   $('#q').value = state.q;
@@ -1722,11 +1807,16 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       $('#hidebtn').setAttribute('aria-expanded', String(!m.hidden));
       if (!m.hidden) renderHideMenu();
     };
-    $('#hideclear').onclick = e => {
-      e.preventDefault(); e.stopPropagation();
-      state.hide = [];
+    /* The pill: on/off only. Which categories apply lives in #hidemenu's own
+       checkboxes and is untouched by this - toggling off and back on restores
+       exactly what was checked before. */
+    $('#hidetoggle').onclick = () => {
+      state.hideOn = !state.hideOn;
       updateHideLabel();
-      if (!$('#hidemenu').hidden) renderHideMenu();
+      if (!state.hideOn) {
+        $('#hidemenu').hidden = true;
+        $('#hidebtn').setAttribute('aria-expanded', 'false');
+      }
       sync();
     };
     document.addEventListener('click', e => {

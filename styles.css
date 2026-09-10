@@ -124,7 +124,19 @@ a{color:var(--blue)}
    match .sortbtn/.sortmenu right next to it rather than the bulkier filter
    selects. A multi-select needs a real button + panel, never a <select>
    (which can't hold checkboxes). */
-.hidewrap{position:relative}
+.hidewrap{position:relative; display:flex; align-items:center; gap:7px}
+/* The pill-shaped master switch. Off, "Hide Shovelware" applies nothing and the
+   category dropdown next to it disappears entirely - there is nothing to pick
+   while the mechanism is off. On, it hides whichever categories are checked in
+   that dropdown, and the checked set survives a toggle-off/on so switching it
+   back on restores exactly what was hidden before. */
+.hidepill{
+  display:flex; align-items:center; gap:8px; font-family:var(--ui); font-size:12px; font-weight:700;
+  color:var(--ink-2); background:var(--panel); border:1px solid var(--line-2);
+  border-radius:999px; padding:5px 13px 5px 6px; cursor:pointer;
+}
+.hidepill:hover{border-color:var(--blue-mid)}
+.hidepill.on{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}
 .hidebtn{
   display:flex; align-items:center; gap:7px; font-family:var(--ui); font-size:12px;
   color:var(--ink-2); background:var(--panel); border:1px solid var(--line-2);
@@ -134,8 +146,6 @@ a{color:var(--blue)}
 .hidebtn .chev{font-size:10px; color:var(--ink-4)}
 .hidebtn.active, .hidebtn[aria-expanded="true"]{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}
 .hidebtn.active .chev{color:var(--blue)}
-.hidebtn.clearable{padding-right:28px}
-.hidewrap .fselclear{right:2px}
 .hidemenu{
   /* Left-edge-anchored, extending rightward: Hide is the LEFTMOST control in
      .bar-right (Hide, then Sort, then the view toggle), so there is always at
