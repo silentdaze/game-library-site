@@ -1230,7 +1230,7 @@ function buildFilters() {
      separate a child from the parent it is indented under. */
   const cats = META.storeCategories[state.store];
   if (cats) {
-    const catRows = () => cats.map(c => ({ value: c.id, label: (c.parent ? '↳ ' : '') + c.label }));
+    const catRows = () => cats.map(c => ({ value: c.id, label: c.label }));
     const cg = mkDropdown('category', 'Category', catRows, state.category, 'All categories',
       { cls: 'dep', sortable: false,
         onClear: () => { state.category = ''; sync(); },
@@ -1264,27 +1264,34 @@ function buildFilters() {
     { onClear: () => { state.genre = ''; sync(); },
       onSelect: v => { state.genre = v; sync(); } });
 
-  /* Built from META.statuses, which is tallied off the workbook. Nothing here
-     names a status, so `Sampled` appeared at v73 without a code change and a
-     sixth value would too - handoff 3.3b. Values are shown with the workbook's
-     own wording; the controlled vocabulary ships as-is (handoff 16).
-     `Played` and `Priority backlog` are pinned first/last rather than sorted
-     with the rest - they are not workbook statuses, they are the site's own
-     derived views, and alphabetising them into the middle of the list would
-     separate them from what they actually mean. */
+  /* Built from META.statuses, which is tallied off the workbook, but shown in
+     a FIXED order rather than the workbook's own count order or an A-Z
+     toggle - Justin's ask, 2026-09-10: this list reads as a sequence (how far
+     a game got), and reordering it by number of games or alphabetically
+     breaks that reading every time the counts shift. `Played` and `Priority
+     backlog` are not workbook statuses at all - they're the site's own
+     derived views - so they are pinned outside this order, first and last.
+     A status the workbook carries that ISN'T in this list still ships,
+     appended before "Priority backlog" rather than silently dropped - the
+     same resilience handoff 3.3b already asks for, just no longer expressed
+     as a sort. */
+  const STATUS_ORDER = ['Beaten', 'Sampled', 'In Progress', 'Retired', 'Abandoned', 'Unplayed'];
   const c = META.counts;
-  const statusRows = order => {
-    const core = order === 'alpha'
-      ? [...(META.statuses || [])].sort((a, b) => a.value.localeCompare(b.value))
-      : (META.statuses || []);
+  const statusRows = () => {
+    const byValue = new Map((META.statuses || []).map(d => [d.value, d]));
     const rows = [];
     if (c.played) rows.push({ value: 'played', label: 'Played', count: c.played });
-    core.forEach(d => rows.push({ value: d.value, label: d.value, count: d.count }));
+    STATUS_ORDER.forEach(v => {
+      const d = byValue.get(v);
+      if (d) { rows.push({ value: d.value, label: d.value, count: d.count }); byValue.delete(v); }
+    });
+    byValue.forEach(d => rows.push({ value: d.value, label: d.value, count: d.count }));
     rows.push({ value: 'backlog', label: 'Priority backlog', count: null });
     return rows;
   };
   mkDropdown('status', 'Status', statusRows, state.status, 'Any status',
-    { onClear: () => { state.status = ''; sync(); },
+    { sortable: false,
+      onClear: () => { state.status = ''; sync(); },
       onSelect: v => { state.status = v; sync(); } });
 
   /* ---- the eight axes behind "More filters" ----------------------------
@@ -1379,14 +1386,22 @@ function updateSortLabel() {
 
 /* ---------------------------------------------------------------- hide UI */
 
-/* Each entry is one of META.shovelwareRules (export_json.py) - Demos, Hidden
-   Object Games, itch.io Highlights, itch.io Bundles as of 2026-09-08. Data-
-   driven the same way the sort menu's own list is: adding a fifth rule is an
-   entry in SHOVELWARE_RULES, no code here to touch. */
+/* One dropdown, not two controls - the on/off switch lives IN the panel's own
+   header, same spot every other dropdown puts its #/A-Z toggle, so "Hide
+   Shovelware" reads as one more field instead of a pill sitting next to an
+   unrelated-looking button. Off doesn't hide the category list - it dims it,
+   pointer-events and all - so the checked set stays visible and legible while
+   it isn't in effect, rather than vanishing the moment the switch flips.
+
+   Each row is one of META.shovelwareRules (export_json.py) - Demos, Hidden
+   Object Games, itch.io Highlights, itch.io Bundles, Unplayed Free Switch
+   Games as of 2026-09-10. Data-driven the same way the sort menu's own list
+   is: adding a sixth rule is an entry in SHOVELWARE_RULES, no code here to
+   touch. */
 function renderHideMenu() {
-  const m = $('#hidemenu');
-  m.replaceChildren();
-  m.appendChild(el('h6', null, 'Hide'));
+  const list = $('#hidelist');
+  list.replaceChildren();
+  list.classList.toggle('off', !state.hideOn);
   (META.shovelwareRules || []).forEach(r => {
     const row = el('button', 'sortcheck');
     const on = state.hide.includes(r.id);
@@ -1403,21 +1418,19 @@ function renderHideMenu() {
       state.hide = on ? state.hide.filter(id => id !== r.id) : [...state.hide, r.id];
       renderHideMenu(); updateHideLabel(); sync();
     };
-    m.appendChild(row);
+    list.appendChild(row);
   });
 }
 
 function updateHideLabel() {
-  const pill = $('#hidetoggle');
-  pill.classList.toggle('on', state.hideOn);
-  pill.querySelector('.tgl').classList.toggle('on', state.hideOn);
-  pill.setAttribute('aria-checked', String(state.hideOn));
-  /* The category dropdown only exists to say WHICH categories the pill
-     applies to - with the pill off there is nothing for it to do, so it
-     disappears rather than sitting there disabled. */
-  $('#hidebtn').hidden = !state.hideOn;
-  $('#hidelabel').textContent = state.hide.length ? `${state.hide.length} hidden` : 'Choose categories';
-  $('#hidebtn').classList.toggle('active', state.hide.length > 0);
+  const sw = $('#hidetoggle');
+  sw.classList.toggle('on', state.hideOn);
+  sw.querySelector('.tgl').classList.toggle('on', state.hideOn);
+  sw.setAttribute('aria-checked', String(state.hideOn));
+  const inEffect = state.hideOn && state.hide.length > 0;
+  $('#hidelabel').textContent = inEffect ? `Hide Shovelware · ${state.hide.length}` : 'Hide Shovelware';
+  $('#hidebtn').classList.toggle('active', inEffect);
+  $('#hidelist').classList.toggle('off', !state.hideOn);
 }
 
 /* ---------------------------------------------------------------- health */
@@ -1884,26 +1897,31 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (!m.hidden) renderSortMenu();
     };
     /* Left of the sort button, Justin's call - was in the main filter row,
-       moved 2026-09-08. Static markup + a persistent #hidemenu, same pattern
-       as #sortbtn/#sortmenu right next to it, rather than the rebuilt-by-
-       buildFilters() version this replaced. */
+       moved 2026-09-08. Static markup - `#hidebtn`/`#hidemenu` carry the same
+       `.dtrigger`/`.dpanel` classes buildFilters() gives every OTHER filter
+       dropdown, so they open/close/anchor exactly the same way and need no
+       special case in the outside-click or Escape handlers below. */
     $('#hidebtn').onclick = e => {
       e.stopPropagation();
-      const m = $('#hidemenu');
-      m.hidden = !m.hidden;
-      $('#hidebtn').setAttribute('aria-expanded', String(!m.hidden));
-      if (!m.hidden) renderHideMenu();
+      const opening = $('#hidemenu').hidden;
+      closeAllDropdowns();
+      $('#hidemenu').hidden = !opening;
+      $('#hidebtn').setAttribute('aria-expanded', String(opening));
+      if (opening) renderHideMenu();
     };
-    /* The pill: on/off only. Which categories apply lives in #hidemenu's own
-       checkboxes and is untouched by this - toggling off and back on restores
-       exactly what was checked before. */
-    $('#hidetoggle').onclick = () => {
+    /* Blank click on the panel's own padding still has to stop here - every
+       OTHER dropdown's panel is built fresh by mkDropdown with this same
+       line, but this one is static markup so it needs its own copy. */
+    $('#hidemenu').onclick = e => e.stopPropagation();
+    /* The switch: on/off only, and it stays open when clicked - the
+       checkboxes right below it are the reason anyone opened this panel, and
+       flipping the switch is not a reason to lose sight of them. Which
+       categories apply lives in the checkboxes and is untouched by this -
+       toggling off and back on restores exactly what was checked before. */
+    $('#hidetoggle').onclick = e => {
+      e.stopPropagation();
       state.hideOn = !state.hideOn;
       updateHideLabel();
-      if (!state.hideOn) {
-        $('#hidemenu').hidden = true;
-        $('#hidebtn').setAttribute('aria-expanded', 'false');
-      }
       sync();
     };
     document.addEventListener('click', e => {
@@ -1911,19 +1929,15 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (!m.hidden && !m.contains(e.target) && e.target !== $('#sortbtn')) {
         m.hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
       }
-      const hm = $('#hidemenu');
-      if (!hm.hidden && !hm.contains(e.target) && e.target !== $('#hidebtn') && !$('#hidebtn').contains(e.target)) {
-        hm.hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
-      }
       /* Every filter dropdown's own trigger and panel stop this click from
-         bubbling here at all (see mkDropdown), so any click that DOES reach
-         this point is by definition outside all of them. */
+         bubbling here at all (see mkDropdown, and the two handlers just
+         above for the Hide dropdown's static markup), so any click that DOES
+         reach this point is by definition outside all of them. */
       closeAllDropdowns();
     });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
-        $('#hidemenu').hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
         closeAllDropdowns();
       }
     });
