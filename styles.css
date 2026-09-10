@@ -87,30 +87,40 @@ a{color:var(--blue)}
 
 /* ---------- filters ---------- */
 .filters{display:flex; gap:9px; flex-wrap:wrap; padding-top:17px; align-items:flex-end}
-.fgroup{display:flex; flex-direction:column; gap:5px}
+/* `position:relative` here, not on `.filters` - each field is its own
+   anchor, so its panel (`.dpanel`, below) opens directly under ITS OWN
+   trigger no matter where that trigger sits in the row. */
+.fgroup{display:flex; flex-direction:column; gap:5px; position:relative}
 /* Only the dependent Category group animates, and only when it appears.
    Animating every group made the whole bar flash on each filter change. */
 .fgroup.appears{animation:pop .18s ease}
 @keyframes pop{from{opacity:0; transform:translateY(-3px)} to{opacity:1; transform:none}}
 .fgroup label{font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-4)}
-.fgroup select{
+
+/* The button that replaces a native <select> - same footprint and look the
+   select had, so the row doesn't change shape, but this one can open a panel
+   with a header instead of an OS-drawn popup neither CSS nor HTML can reach
+   inside of. */
+.dtrigger{
   font-family:var(--ui); font-size:13px; color:var(--ink); font-weight:600;
   border:1.5px solid var(--line-2); background:var(--panel); border-radius:10px;
-  padding:9px 30px 9px 11px; min-width:140px; cursor:pointer; appearance:none;
-  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2364778b' stroke-width='1.6' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
-  background-repeat:no-repeat; background-position:right 11px center;
+  padding:9px 11px; min-width:140px; cursor:pointer; display:flex;
+  align-items:center; justify-content:space-between; gap:8px; text-align:left;
 }
-.fgroup select.active{border-color:var(--blue-mid); background-color:var(--blue-soft); color:var(--blue)}
-.fgroup select.dep{border-style:dashed}
+.dtrigger .arrow{font-size:9px; color:var(--ink-4); flex:none; transition:transform .15s}
+.dtrigger.active{border-color:var(--blue-mid); background-color:var(--blue-soft); color:var(--blue)}
+.dtrigger.active .arrow{color:var(--blue)}
+.dtrigger.dep{border-style:dashed}
+.dtrigger[aria-expanded="true"]{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}
+.dtrigger[aria-expanded="true"] .arrow{color:var(--blue); transform:rotate(180deg)}
 .clearall{align-self:flex-end; font-size:12.5px; color:var(--blue); background:none; border:0; cursor:pointer; padding:10px 6px; font-weight:700; font-family:var(--ui)}
 .clearall:hover{text-decoration:underline}
 
 /* One filter's own × - only rendered while that filter is set, alongside
    "Clear filters" rather than instead of it: this clears one dropdown without
-   losing the others. Sits inside the select's own right padding, which
-   `select.clearable` widens and shifts the native arrow out of the way of. */
-.selwrap{position:relative; display:inline-flex}
-.fgroup select.clearable{padding-right:54px; background-position:right 33px center}
+   losing the others. */
+.ddwrap{position:relative; display:inline-flex}
+.dtrigger.clearable{padding-right:32px}
 .fselclear{
   position:absolute; right:5px; top:50%; transform:translateY(-50%);
   width:21px; height:21px; display:flex; align-items:center; justify-content:center;
@@ -118,6 +128,44 @@ a{color:var(--blue)}
   font-size:16px; line-height:1; border-radius:50%; padding:0;
 }
 .fselclear:hover{color:var(--coral); background:var(--panel-3)}
+
+/* The panel a `.dtrigger` opens - anchored to `.fgroup` (see above), so it
+   always sits directly under the field it belongs to. `.dhead` is the whole
+   point of building this instead of using a <select>: the field's name and,
+   for anything worth reordering, a compact #/A-Z switch that reorders only
+   this one list and remembers its choice per field. */
+.dpanel{
+  position:absolute; top:calc(100% + 7px); left:0; z-index:20; min-width:100%;
+  width:max-content; max-width:300px;
+  background:var(--panel); border:1px solid var(--line-2); border-radius:var(--r);
+  box-shadow:var(--sh-lg); overflow:hidden;
+}
+.dpanel[hidden]{display:none}
+.dhead{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  padding:10px 11px 9px; border-bottom:1px solid var(--line);
+}
+.dhead h6{
+  margin:0; font-family:var(--mono); font-size:9.5px; letter-spacing:.14em;
+  text-transform:uppercase; color:var(--ink-4); font-weight:400; white-space:nowrap;
+}
+.ordertoggle{display:flex; border:1px solid var(--line-2); border-radius:7px; overflow:hidden; background:var(--panel-2); flex:none}
+.ordertoggle button{
+  font-family:var(--mono); font-size:10px; font-weight:500; color:var(--ink-3);
+  border:0; background:transparent; padding:4px 8px; cursor:pointer; line-height:1.4;
+}
+.ordertoggle button.on{background:var(--blue); color:#fff}
+.ordertoggle button:not(.on):hover{color:var(--ink)}
+.doptions{max-height:300px; overflow-y:auto; padding:6px}
+.dopt{
+  display:flex; align-items:center; justify-content:space-between; gap:10px;
+  width:100%; text-align:left; font-family:var(--ui); font-size:13px; color:var(--ink-2);
+  background:none; border:0; border-radius:var(--r-sm); padding:8px 9px; cursor:pointer;
+}
+.dopt:hover{background:var(--panel-2)}
+.dopt.on{background:var(--blue-soft); color:var(--blue); font-weight:700}
+.dopt .n{font-family:var(--mono); font-size:11px; color:var(--ink-4); font-variant-numeric:tabular-nums; flex:none}
+.dopt.on .n{color:var(--blue)}
 
 /* "Hide" - sits left of the sort button in the result bar (moved out of the
    main filter row and out of the sort menu, 2026-09-08), so it is styled to
@@ -196,7 +244,7 @@ a{color:var(--blue)}
 @media (max-width:560px){
   .morepanel{padding:12px}
   .morepanel .fgroup{flex:1 1 100%}
-  .morepanel .fgroup select{width:100%; min-width:0}
+  .morepanel .fgroup .dtrigger{width:100%; min-width:0}
 }
 
 .resultbar{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:17px 0 12px; margin-top:14px; border-bottom:1px solid var(--line-2)}

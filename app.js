@@ -161,20 +161,23 @@ function panelPref(v) {
 }
 let panelOpen = panelPref();
 
-/* Whether dropdown options (Platform, Genre, Status, the More-filters axes)
-   list their most common value first - the site's own default and behaviour
-   before this - or alphabetically. A browser preference, not URL state: it
-   changes how a choice is FOUND, never which choice is active, so a shared
-   link should not carry it. */
+/* Whether a given dropdown (keyed by filter id - "platform", "genre", ...)
+   lists its choices most-common-first (the site's own long-standing default)
+   or A-Z. Per FIELD rather than one site-wide switch: Platform and Genre are
+   found differently (a dozen values you'd recognise by rank, versus ninety
+   you'd rather find by name), so each field remembers its own choice. A
+   browser preference, not URL state: it changes how a choice is FOUND, never
+   which choice is active, so a shared link should not carry it. */
 const OPTSORT_KEY = 'gl.filters.optsort';
-function optSortPref(v) {
-  try {
-    if (v === undefined) return localStorage.getItem(OPTSORT_KEY) === 'alpha';
-    localStorage.setItem(OPTSORT_KEY, v ? 'alpha' : 'count');
-  } catch (e) { /* no storage: dropdowns just keep the default order */ }
-  return v;
+function loadOptSort() {
+  try { return JSON.parse(localStorage.getItem(OPTSORT_KEY) || '{}'); }
+  catch (e) { return {}; }
 }
-let optSortAlpha = optSortPref();
+function saveOptSort(map) {
+  try { localStorage.setItem(OPTSORT_KEY, JSON.stringify(map)); }
+  catch (e) { /* no storage: the toggle just resets on reload */ }
+}
+const optSort = loadOptSort();
 
 /* Which set the Stats page's ranked lists describe: 'played' or 'logged'.
    Played is the default - it is the more interesting question, and the one the
@@ -1086,113 +1089,203 @@ function renderDetail(id) {
 
 /* ---------------------------------------------------------------- filter UI */
 
+/* Closes every open dropdown panel this function built - called before
+   opening a different one (only one at a time, same as a native <select>),
+   and from the document-level click/Escape handlers registered at boot. Safe
+   to call with nothing open. */
+function closeAllDropdowns() {
+  document.querySelectorAll('.dpanel:not([hidden])').forEach(p => { p.hidden = true; });
+  document.querySelectorAll('.dtrigger[aria-expanded="true"]')
+    .forEach(t => t.setAttribute('aria-expanded', 'false'));
+}
+
 function buildFilters() {
   const box = $('#filters');
   box.replaceChildren();
 
-  /* `parent` defaults to the always-visible bar; the extra-filter panel passes
-     itself so its controls are built straight into it. `onClear` is what a
-     lone filter's own × button runs - each filter clears itself differently
-     (Store also clears the dependent Category), so this is the caller's
-     rule, not a generic "set state[key] = ''" this function would get wrong. */
-  const mk = (id, label, options, value, cls, parent, onClear) => {
+  /* Replaces a native <select> with a button that opens a floating panel of
+     its own - the same shape Sort and Hide already use elsewhere on this
+     page, chosen here so the panel can carry a HEADER: the field's name and,
+     for anything with more than a couple of values, a small #/A-Z switch
+     that reorders just that one list. A native <select>'s popup is drawn by
+     the OS and cannot hold either.
+
+     `rows(order)` returns this field's options for a given order - callers
+     that pin an entry first or last (Status's `Played`, Genre's `Untagged`)
+     do that inside their own `rows`, not here, so this function never needs
+     to know which fields have exceptions. `parent` defaults to the
+     always-visible bar; the More-filters panel passes itself. `onClear` is
+     what the lone × next to an active filter runs - Store also clears the
+     dependent Category, so this stays the caller's rule rather than a
+     generic "set state[key] = ''" this function would get wrong. */
+  const mkDropdown = (key, label, rows, value, allLabel, opts) => {
+    const o = opts || {};
     const g = el('span', 'fgroup');
-    const l = el('label', null, label); l.htmlFor = 'f-' + id;
-    const wrap = el('span', 'selwrap');
-    const s = el('select'); s.id = 'f-' + id;
-    if (value) s.className = 'active' + (cls ? ' ' + cls : ''); else if (cls) s.className = cls;
-    options.forEach(o => {
-      const opt = el('option', null, o.label);
-      opt.value = o.value;
-      if (o.value === value) opt.selected = true;
-      s.appendChild(opt);
-    });
-    wrap.appendChild(s);
-    if (value && onClear) {
-      s.classList.add('clearable');
+    g.appendChild(el('label', null, label));
+
+    const dwrap = el('span', 'ddwrap');
+    const trigger = el('button', 'dtrigger' + (value ? ' active' : '') + (o.cls ? ' ' + o.cls : ''));
+    trigger.type = 'button';
+    trigger.setAttribute('aria-haspopup', 'true');
+    trigger.setAttribute('aria-expanded', 'false');
+    const triggerText = el('span', null, allLabel);
+    trigger.append(triggerText, el('span', 'arrow', '▾'));
+    dwrap.appendChild(trigger);
+    if (value && o.onClear) {
+      trigger.classList.add('clearable');
       const x = el('button', 'fselclear', '×');
       x.type = 'button';
       x.setAttribute('aria-label', 'Clear ' + label);
-      x.onclick = e => { e.preventDefault(); e.stopPropagation(); onClear(); };
-      wrap.appendChild(x);
+      x.onclick = e => { e.preventDefault(); e.stopPropagation(); o.onClear(); };
+      dwrap.appendChild(x);
     }
-    g.append(l, wrap);
-    (parent || box).appendChild(g);
-    return s;
+    g.appendChild(dwrap);
+
+    const panel = el('div', 'dpanel');
+    panel.hidden = true;
+    const head = el('div', 'dhead');
+    head.appendChild(el('h6', null, label));
+    let order = (o.sortable === false) ? 'count' : (optSort[key] || 'count');
+    if (o.sortable !== false) {
+      const tog = el('div', 'ordertoggle');
+      const bCount = el('button', order === 'count' ? 'on' : '', '#');
+      const bAlpha = el('button', order === 'alpha' ? 'on' : '', 'A–Z');
+      bCount.type = 'button'; bAlpha.type = 'button';
+      const pick = (which, btn, other) => {
+        order = which; optSort[key] = which; saveOptSort(optSort);
+        btn.classList.add('on'); other.classList.remove('on');
+        renderOptions();
+      };
+      bCount.onclick = e => { e.stopPropagation(); pick('count', bCount, bAlpha); };
+      bAlpha.onclick = e => { e.stopPropagation(); pick('alpha', bAlpha, bCount); };
+      tog.append(bCount, bAlpha);
+      head.appendChild(tog);
+    }
+    panel.appendChild(head);
+    const list = el('div', 'doptions');
+    panel.appendChild(list);
+
+    function renderOptions() {
+      list.replaceChildren();
+      const any = el('button', 'dopt' + (value ? '' : ' on'));
+      any.type = 'button';
+      any.appendChild(el('span', null, allLabel));
+      any.onclick = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); o.onSelect(''); };
+      list.appendChild(any);
+      rows(order).forEach(r => {
+        const b = el('button', 'dopt' + (r.value === value ? ' on' : ''));
+        b.type = 'button';
+        b.appendChild(el('span', null, r.label));
+        if (r.count != null) b.appendChild(el('span', 'n', r.count.toLocaleString()));
+        b.onclick = () => { panel.hidden = true; trigger.setAttribute('aria-expanded', 'false'); o.onSelect(r.value); };
+        list.appendChild(b);
+      });
+    }
+    renderOptions();
+
+    /* The selected row's own label, looked up rather than re-derived, so the
+       trigger reads exactly what the open panel would highlight - Genre's
+       `Unknown` shows its explanatory text, not the bare value. */
+    if (value) {
+      const selRow = rows('count').find(r => r.value === value);
+      triggerText.textContent = selRow ? selRow.label : allLabel;
+    }
+
+    trigger.onclick = e => {
+      e.stopPropagation();
+      const opening = panel.hidden;
+      closeAllDropdowns();
+      panel.hidden = !opening;
+      trigger.setAttribute('aria-expanded', String(opening));
+    };
+    panel.onclick = e => e.stopPropagation();
+
+    g.appendChild(panel);
+    (o.parent || box).appendChild(g);
+    return g;
   };
 
   const fx = META.facets;
-  /* Alphabetical is a straight string sort over whatever the facet already
-     is - it never changes WHICH values are offered, only the order they list
-     in, so applying it here rather than inside each individual dropdown's own
-     construction covers Platform, Store, Genre and all eight More-filters
-     axes from one place. */
-  const orderOpts = arr => optSortAlpha
-    ? [...arr].sort((a, b) => a.value.localeCompare(b.value, 'en', { numeric: true }))
-    : arr;
-  const opts = (arr, all) => [{ value: '', label: all }].concat(
-    orderOpts(arr).map(f => ({ value: f.value, label: `${f.value}  (${f.count.toLocaleString()})` })));
+  /* Shared by every plain facet-backed field (Platform, Store, and each of
+     the eight More-filters axes) - Genre and Status build their own `rows`
+     instead, since each pins an entry or two out of the normal order. */
+  const facetRows = facet => order => {
+    const list = order === 'alpha'
+      ? [...facet].sort((a, b) => a.value.localeCompare(b.value, 'en', { numeric: true }))
+      : facet;
+    return list.map(f => ({ value: f.value, label: f.value, count: f.count }));
+  };
 
-  mk('platform', 'Platform', opts(fx.platform, 'Any platform'), state.platform, null, null,
-     () => { state.platform = ''; sync(); })
-    .onchange = e => { state.platform = e.target.value; sync(); };
+  mkDropdown('platform', 'Platform', facetRows(fx.platform), state.platform, 'Any platform',
+    { onClear: () => { state.platform = ''; sync(); },
+      onSelect: v => { state.platform = v; sync(); } });
 
-  mk('store', 'Store', opts(fx.store, 'All stores'), state.store, null, null,
-     () => { state.store = ''; state.category = ''; sync(); })
-    .onchange = e => { state.store = e.target.value; state.category = ''; sync(); };
+  mkDropdown('store', 'Store', facetRows(fx.store), state.store, 'All stores',
+    { onClear: () => { state.store = ''; state.category = ''; sync(); },
+      onSelect: v => { state.store = v; state.category = ''; sync(); } });
 
   /* Category only exists for the three stores that have one. Not rendered at
-     all otherwise - no permanently dead control. */
+     all otherwise - no permanently dead control. A curated parent/child list
+     of two or three entries, so no sort toggle - alphabetising it would
+     separate a child from the parent it is indented under. */
   const cats = META.storeCategories[state.store];
   if (cats) {
-    const list = [{ value: '', label: 'All categories' }].concat(
-      cats.map(c => ({ value: c.id, label: (c.parent ? '   ↳ ' : '') + c.label })));
-    const csel = mk('category', 'Category', list, state.category, 'dep', null,
-                    () => { state.category = ''; sync(); });
-    csel.parentNode.classList.add('appears');
-    csel.onchange = e => { state.category = e.target.value; sync(); };
+    const catRows = () => cats.map(c => ({ value: c.id, label: (c.parent ? '↳ ' : '') + c.label }));
+    const cg = mkDropdown('category', 'Category', catRows, state.category, 'All categories',
+      { cls: 'dep', sortable: false,
+        onClear: () => { state.category = ''; sync(); },
+        onSelect: v => { state.category = v; sync(); } });
+    cg.classList.add('appears');
   }
 
   /* `Unknown` is a real, selectable Genre value (an itch.io bundle row whose
      description gave no clean genre signal) rather than a hole in the data -
      that's what makes it different from `__untagged` below. But it's also
-     the single largest Genre value in the sheet, so sorted by count like
-     every other value it would land at the TOP of the dropdown, ahead of
-     every real genre. Pulled out and appended after the real vocabulary
-     instead, with a label that says what it means. */
-  const genreOpts = opts(fx.genre.filter(f => f.value !== 'Unknown'), 'Any genre');
+     the single largest Genre value in the sheet, so sorted with everything
+     else it would land at the TOP of the dropdown, ahead of every real
+     genre. Pinned after the real vocabulary instead, in both orders, with a
+     label that says what it means. `Untagged` only appears at all once its
+     count is nonzero - a choice that can never return a result is clutter,
+     not a choice (it sat at 0 once the chat cleared the last gap). */
+  const genreCore = fx.genre.filter(f => f.value !== 'Unknown');
   const unknownGenre = fx.genre.find(f => f.value === 'Unknown');
-  if (unknownGenre) {
-    genreOpts.push({ value: 'Unknown',
-      label: `Unknown (itch.io bundle, no genre signal)  (${unknownGenre.count.toLocaleString()})` });
-  }
-  /* A value with nobody in it is not a choice, it's clutter - `Untagged` sat
-     at (0) once the chat cleared the last gap, and a dropdown option that can
-     never return a result is worse than no option at all. */
-  if (META.counts.untagged) {
-    genreOpts.push({ value: '__untagged', label: `Untagged  (${META.counts.untagged.toLocaleString()})` });
-  }
-  mk('genre', 'Genre', genreOpts, state.genre, null, null,
-     () => { state.genre = ''; sync(); })
-    .onchange = e => { state.genre = e.target.value; sync(); };
+  const genreRows = order => {
+    const list = order === 'alpha'
+      ? [...genreCore].sort((a, b) => a.value.localeCompare(b.value, 'en', { numeric: true }))
+      : genreCore;
+    const rows = list.map(f => ({ value: f.value, label: f.value, count: f.count }));
+    if (unknownGenre) {
+      rows.push({ value: 'Unknown', label: 'Unknown (itch.io bundle, no genre signal)', count: unknownGenre.count });
+    }
+    if (META.counts.untagged) rows.push({ value: '__untagged', label: 'Untagged', count: META.counts.untagged });
+    return rows;
+  };
+  mkDropdown('genre', 'Genre', genreRows, state.genre, 'Any genre',
+    { onClear: () => { state.genre = ''; sync(); },
+      onSelect: v => { state.genre = v; sync(); } });
 
   /* Built from META.statuses, which is tallied off the workbook. Nothing here
      names a status, so `Sampled` appeared at v73 without a code change and a
      sixth value would too - handoff 3.3b. Values are shown with the workbook's
      own wording; the controlled vocabulary ships as-is (handoff 16).
-     `played` and `backlog` are pinned first/last rather than sorted with the
-     rest - they are not workbook statuses, they are the site's own derived
-     views, and alphabetising them into the middle of the list would separate
-     them from what they actually mean. */
+     `Played` and `Priority backlog` are pinned first/last rather than sorted
+     with the rest - they are not workbook statuses, they are the site's own
+     derived views, and alphabetising them into the middle of the list would
+     separate them from what they actually mean. */
   const c = META.counts;
-  const statusOpts = [{ value: '', label: 'Any status' }];
-  if (c.played) statusOpts.push({ value: 'played', label: `Played  (${c.played.toLocaleString()})` });
-  orderOpts(META.statuses || []).forEach(d =>
-    statusOpts.push({ value: d.value, label: `${d.value}  (${d.count.toLocaleString()})` }));
-  statusOpts.push({ value: 'backlog', label: 'Priority backlog' });
-  mk('status', 'Status', statusOpts, state.status, null, null,
-     () => { state.status = ''; sync(); })
-    .onchange = e => { state.status = e.target.value; sync(); };
+  const statusRows = order => {
+    const core = order === 'alpha'
+      ? [...(META.statuses || [])].sort((a, b) => a.value.localeCompare(b.value))
+      : (META.statuses || []);
+    const rows = [];
+    if (c.played) rows.push({ value: 'played', label: 'Played', count: c.played });
+    core.forEach(d => rows.push({ value: d.value, label: d.value, count: d.count }));
+    rows.push({ value: 'backlog', label: 'Priority backlog', count: null });
+    return rows;
+  };
+  mkDropdown('status', 'Status', statusRows, state.status, 'Any status',
+    { onClear: () => { state.status = ''; sync(); },
+      onSelect: v => { state.status = v; sync(); } });
 
   /* ---- the eight axes behind "More filters" ----------------------------
      Kept off the opening screen on purpose: Platform, Store, Genre and Status
@@ -1221,17 +1314,6 @@ function buildFilters() {
   };
   box.appendChild(more);
 
-  /* One switch for how every dropdown above lists its choices - most common
-     first (the site's own long-standing default) or A-Z. Reuses `.morebtn`'s
-     look rather than earning a new style, since it is the same kind of small
-     toggle sitting on the same row. */
-  const optsort = el('button', 'morebtn' + (optSortAlpha ? ' on' : ''));
-  optsort.type = 'button';
-  optsort.title = 'Order the choices in these dropdowns by how common they are, or alphabetically';
-  optsort.append(optSortAlpha ? 'A–Z' : 'Most common');
-  optsort.onclick = () => { optSortAlpha = optSortPref(!optSortAlpha); buildFilters(); };
-  box.appendChild(optsort);
-
   if (open) {
     const panel = el('div', 'morepanel');
     EXTRA_AXES.forEach(([key, label]) => {
@@ -1240,9 +1322,10 @@ function buildFilters() {
          than an empty dropdown that looks broken. `artSound` was in this
          position until v120. */
       if (!facet || !facet.length) return;
-      const sel = mk(key, label, opts(facet, 'Any ' + label.toLowerCase()),
-                     state[key], null, panel, () => { state[key] = ''; sync(); });
-      sel.onchange = e => { state[key] = e.target.value; sync(); };
+      mkDropdown(key, label, facetRows(facet), state[key], 'Any ' + label.toLowerCase(),
+        { parent: panel,
+          onClear: () => { state[key] = ''; sync(); },
+          onSelect: v => { state[key] = v; sync(); } });
     });
     box.appendChild(panel);
   }
@@ -1832,11 +1915,16 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
       if (!hm.hidden && !hm.contains(e.target) && e.target !== $('#hidebtn') && !$('#hidebtn').contains(e.target)) {
         hm.hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
       }
+      /* Every filter dropdown's own trigger and panel stop this click from
+         bubbling here at all (see mkDropdown), so any click that DOES reach
+         this point is by definition outside all of them. */
+      closeAllDropdowns();
     });
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') {
         $('#sortmenu').hidden = true; $('#sortbtn').setAttribute('aria-expanded', 'false');
         $('#hidemenu').hidden = true; $('#hidebtn').setAttribute('aria-expanded', 'false');
+        closeAllDropdowns();
       }
     });
 
