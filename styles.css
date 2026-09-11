@@ -273,6 +273,61 @@ a{color:var(--blue)}
   .rright{display:none}
 }
 
+/* ---------- grid view ---------- */
+/* Uniform tiles, art as the hero. `auto-fill` rather than `auto-fit` so a
+   half-empty last row never stretches its cards wide to fill the gap - a
+   catalogue grid should read as a grid, at any width. */
+.cardgrid{display:grid; grid-template-columns:repeat(auto-fill,minmax(148px,1fr)); gap:16px; padding-top:2px}
+.card{
+  position:relative; display:block; aspect-ratio:2/3; border-radius:var(--r);
+  overflow:hidden; text-decoration:none; color:inherit;
+  background:linear-gradient(160deg,var(--panel-3),var(--blue-soft));
+  border:1px solid var(--line-2); box-shadow:var(--sh);
+  transition:transform .12s ease, box-shadow .12s ease;
+}
+.card:hover{transform:translateY(-3px); box-shadow:var(--sh-lg); border-color:var(--blue-mid)}
+.card-art{position:absolute; inset:0}
+/* Cropped to fill, unlike the detail hero and list thumb (fitShape()) -
+   deliberate here, so a grid of hundreds of tiles reads as one consistent
+   shape rather than a mix of portrait boxes and letterboxed banners. */
+.card-art img{width:100%; height:100%; object-fit:cover; display:block}
+.card-chip{
+  position:absolute; top:8px; left:8px; z-index:1;
+  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.04em;
+  color:#fff; padding:3px 8px; border-radius:20px; box-shadow:0 1px 3px rgba(29,42,58,.35);
+}
+.card-chip.b{background:var(--mint)} .card-chip.a{background:var(--coral)}
+.card-chip.p{background:var(--blue)} .card-chip.s{background:var(--gold)}
+.card-chip.r{background:var(--slate)} .card-chip.x{background:var(--lilac)}
+/* The scrim: built from --ink rather than plain black, so it reads as this
+   site's own colour under any cover rather than a generic darken filter. */
+.card.has-cover .card-ov{
+  position:absolute; left:0; right:0; bottom:0; padding:28px 10px 10px;
+  background:linear-gradient(to top, rgba(29,42,58,.92) 0%, rgba(29,42,58,.62) 60%, transparent 100%);
+}
+.card.has-cover .card-t{color:#fff; text-shadow:0 1px 4px rgba(29,42,58,.5)}
+.card.has-cover .card-p{color:rgba(255,255,255,.8)}
+.card-t{
+  font-family:var(--display); font-weight:600; font-size:12.5px; line-height:1.3;
+  letter-spacing:-.005em; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.card-p{font-family:var(--mono); font-size:9.5px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink-3)}
+/* No cover art (roughly one in twenty rows, and always will be some - the
+   remaining rows will never be filled from Playnite). Same tile shape, same
+   chip, but the title sits directly on the placeholder background instead of
+   a scrim, since there is no image underneath to scrim. */
+.card.no-cover .card-ov{
+  position:absolute; inset:0; display:flex; flex-direction:column; justify-content:flex-end;
+  padding:10px;
+}
+.card.no-cover .card-t{color:var(--ink-2)}
+@media(max-width:560px){
+  .cardgrid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px}
+  .card-t{font-size:11.5px}
+  .card-chip{font-size:8px; padding:2px 6px}
+}
+
 /* ---------- completion view banner ---------- */
 .cbanner{margin:18px 0 4px; padding:15px 18px; border-radius:var(--r); background:var(--mint-soft); border:1px solid var(--mint-line)}
 .cbanner p{margin:0; font-size:14px; color:var(--ink-2); line-height:1.6}

@@ -141,7 +141,12 @@ const state = {
   view: 'library', sort: 'title', dir: 'asc',
   /* 'list' or 'detail'. The infinite-scroll observer must only ever append
      rows while a list is on screen. */
-  mode: 'list'
+  mode: 'list',
+  /* 'list' or 'grid' - how a list-mode screen renders. Independent of `mode`
+     above: `mode` is list-vs-detail (a route), `layout` is list-vs-grid (a
+     presentation choice within the list route). Set for real from
+     layoutPref() once the payload has loaded. */
+  layout: 'list'
 };
 /* One state key per axis, so `state.genre`, `state.mood` and the rest all exist
    before anything reads them. Declared rather than sprung into being by the
@@ -160,6 +165,18 @@ function panelPref(v) {
   return v;
 }
 let panelOpen = panelPref();
+
+/* List vs grid. A browser preference like panelOpen above, not URL state -
+   it changes how results are PRESENTED, never which results they are, so a
+   shared link should not carry it. */
+const LAYOUT_KEY = 'gl.layout';
+function layoutPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(LAYOUT_KEY) === 'grid' ? 'grid' : 'list';
+    localStorage.setItem(LAYOUT_KEY, v);
+  } catch (e) { /* no storage: resets to List each visit */ }
+  return v;
+}
 
 /* Whether a given dropdown (keyed by filter id - "platform", "genre", ...)
    lists its choices most-common-first (the site's own long-standing default)
@@ -229,6 +246,12 @@ function year(g) {
 function statusLine(g) {
   const m = statusMeta(g);
   return m ? { cls: m.cls, text: m.pill(g) } : null;
+}
+
+/* Grid card chip: the status word alone, no completion date - there is no
+   room for `statusLine`'s full pill text on a card this size. */
+function shortStatus(g) {
+  return g.status === 'In Progress' ? 'In progress' : g.status;
 }
 
 /* Owned beats subscription. If he owns it, that is the hero fact and the
@@ -642,6 +665,50 @@ function rowNode(r) {
   return a;
 }
 
+/* Grid card. Same status rail colouring as a list row (ROW_CLASS), but the
+   card's job is different: art is the hero, and the title has to sit ON TOP
+   of it rather than beside it, because so many titles are too long to fit a
+   card-width line - "Super Mario Bros. Wonder: Nintendo Switch 2 Edition +
+   Meetup in Bellabel Park" is a real one. A dark scrim (built from --ink, so
+   it reads as this site's own colour rather than a generic black overlay)
+   sits under the title and clamps to three lines instead of truncating to
+   one, so the difference between two long titles stays legible.
+
+   Cards are cropped to fill a uniform box (object-fit: cover) rather than
+   letterboxed like the detail hero and list thumb - a scannable grid of
+   hundreds of tiles wants one consistent shape more than it wants every
+   landscape itch.io cover shown whole. That is a deliberate difference from
+   fitShape()'s rule elsewhere on the site, not an oversight of it.
+
+   Rows with no cover art (roughly 6% of the library, and it will never be
+   100% - handoff) get a placeholder tile in the same shape, coloured like
+   the list row's own `.cov` placeholder, with the title and platforms simply
+   printed on it instead of scrimmed over an image. */
+function cardNode(r) {
+  const g = r.g;
+  const sl = statusLine(g);
+  const has = hasCover(g.id);
+  const a = el('a', 'card' + (has ? ' has-cover' : ' no-cover') + (sl ? ' ' + ROW_CLASS[sl.cls] : ''));
+  a.href = '#/game/' + g.id;
+
+  const art = el('div', 'card-art');
+  if (has) {
+    const img = el('img'); img.loading = 'lazy'; img.alt = '';
+    img.src = 'covers/' + g.id + '.webp';
+    img.onerror = () => { img.remove(); a.classList.remove('has-cover'); a.classList.add('no-cover'); };
+    art.appendChild(img);
+  }
+  if (sl) art.appendChild(el('span', 'card-chip ' + sl.cls, shortStatus(g)));
+  a.appendChild(art);
+
+  const ov = el('div', 'card-ov');
+  ov.appendChild(el('div', 'card-t', g.title));
+  const plat = simplifyPlatforms(g.platforms || []).slice(0, 2).join(' · ');
+  if (plat) ov.appendChild(el('div', 'card-p', plat));
+  a.appendChild(ov);
+  return a;
+}
+
 function renderMore() {
   if (state.mode !== 'list') return;
   const view = $('#view');
@@ -652,12 +719,14 @@ function renderMore() {
     view.appendChild(e);
     return;
   }
-  let rows = view.querySelector('.rows');
-  if (!rows) { rows = el('div', 'rows'); view.appendChild(rows); }
+  const grid = state.layout === 'grid';
+  const wrapClass = grid ? 'cardgrid' : 'rows';
+  let wrap = view.querySelector('.' + wrapClass);
+  if (!wrap) { wrap = el('div', wrapClass); view.appendChild(wrap); }
   const slice = RESULTS.slice(RENDERED, RENDERED + PAGE);
   const frag = document.createDocumentFragment();
-  slice.forEach(r => frag.appendChild(rowNode(r)));
-  rows.appendChild(frag);
+  slice.forEach(r => frag.appendChild(grid ? cardNode(r) : rowNode(r)));
+  wrap.appendChild(frag);
   RENDERED += slice.length;
 }
 
@@ -1883,6 +1952,25 @@ fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
     $('#c-logged').textContent = c.logged.toLocaleString();
     $('#c-owned').textContent = c.owned.toLocaleString();
     $('#c-beaten').textContent = c.beaten.toLocaleString();
+
+    /* List vs grid. Static markup starts on List (see index.html), so a
+       stored 'grid' preference is applied here rather than baked into the
+       HTML - the common case (first visit, nothing stored) needs no swap. */
+    state.layout = layoutPref();
+    const setLayout = v => {
+      if (state.layout === v) return;
+      state.layout = v;
+      layoutPref(v);
+      $('#v-list').classList.toggle('on', v === 'list');
+      $('#v-grid').classList.toggle('on', v === 'grid');
+      RENDERED = 0;
+      $('#view').replaceChildren();
+      renderMore();
+    };
+    $('#v-list').classList.toggle('on', state.layout === 'list');
+    $('#v-grid').classList.toggle('on', state.layout === 'grid');
+    $('#v-list').onclick = () => setLayout('list');
+    $('#v-grid').onclick = () => setLayout('grid');
 
     let timer;
     $('#q').addEventListener('input', e => {
