@@ -164,6 +164,10 @@ a{color:var(--blue)}
 .ordertoggle button.on{background:var(--blue); color:#fff}
 .ordertoggle button:not(.on):hover{color:var(--ink)}
 .doptions{max-height:300px; overflow-y:auto; padding:12px}
+/* Status only - see the comment on `doptions-short` in app.js. Nine rows at
+   ~40px plus padding never exceeds this, so it's a "never scrolls" height,
+   not a taller cap. */
+.doptions-short{max-height:420px; overflow-y:visible; padding:12px}
 .dopt{
   display:flex; align-items:center; justify-content:space-between; gap:10px;
   width:100%; text-align:left; font-family:var(--ui); font-size:13px; color:var(--ink-2);

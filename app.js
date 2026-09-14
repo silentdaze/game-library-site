@@ -1248,7 +1248,15 @@ function buildFilters() {
       head.appendChild(tog);
     }
     panel.appendChild(head);
-    const list = el('div', 'doptions');
+    /* Status is a short, fixed, fully-enumerable list (nine rows, max) - the
+       shared `.doptions` 300px cap was built for the long filters (Genre,
+       Platform, Store) that genuinely need a scrollbar, and clipped the
+       bottom two Status rows (`Unplayed`, `Priority backlog`) with no visible
+       scroll affordance to say there was more below. Justin's ask, 2026-09-14
+       ("I need an Unplayed... it can go at the bottom under abandoned") - it
+       was already there in STATUS_ORDER, just invisible. `doptions-short`
+       opts this one dropdown out of the cap instead of raising it everywhere. */
+    const list = el('div', 'doptions' + (key === 'status' ? ' doptions-short' : ''));
     panel.appendChild(list);
 
     function renderOptions() {
