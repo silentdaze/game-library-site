@@ -791,10 +791,10 @@ function aliasIndex() {
   };
   GAMES.forEach(g => {
     (g.altTitles || []).forEach(t => claim(t, g.id));
-    /* `Other Versions Owned` is `Name (Platform)`, and the platform half can
-       itself hold brackets - `The Outer Worlds (PC (Windows))`. Greedy, so the
-       whole trailing parenthetical goes. */
-    (g.otherVersions || []).forEach(t => claim(String(t).replace(/\s*\(.*\)\s*$/, ''), g.id));
+    /* `otherVersions` entries are objects since the store-only display
+       change - `{name, stores}`, `name` already stripped of any ownership
+       suffix by export_json.py's parse_other_versions. */
+    (g.otherVersions || []).forEach(t => claim(t.name, g.id));
   });
   return ALIAS;
 }
@@ -1105,9 +1105,10 @@ function renderDetail(id) {
       b.appendChild(rh);
       const ul = el('ul');
       g[key].forEach(entry => {
-        /* `contains` entries are objects since v144; every other relationship
-           column is still a plain string. */
-        const v = (key === 'contains') ? entry.name : entry;
+        /* `contains` and `otherVersions` entries are objects; every other
+           relationship column is still a plain string. */
+        const isObj = key === 'contains' || key === 'otherVersions';
+        const v = isObj ? entry.name : entry;
         const li = el('li');
         const match = GAMES.find(x => x.title === v);
         if (match) { const a = el('a', null, v); a.href = '#/game/' + match.id; li.appendChild(a); }
@@ -1123,6 +1124,19 @@ function renderDetail(id) {
           entry.ownedOn.forEach((t, i) => {
             if (i) own.append(', ');
             own.appendChild(el('b', null, simplifyPlatform(t)));
+          });
+          li.appendChild(own);
+        }
+        /* Justin's ask, 2026-09-14: "where to find" this other version should
+           list just the store(s), not the platform - "it will look cleaner."
+           A suffix that was platform-only leaves `stores` empty, same
+           blank-means-nothing-to-say rule as Contains above. */
+        if (key === 'otherVersions' && entry.stores && entry.stores.length) {
+          const own = el('span', 'own-sep');
+          own.append(' on ');
+          entry.stores.forEach((t, i) => {
+            if (i) own.append(', ');
+            own.appendChild(el('b', null, t));
           });
           li.appendChild(own);
         }
