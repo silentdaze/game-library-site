@@ -1522,8 +1522,11 @@ function updateHideLabel() {
   sw.classList.toggle('on', state.hideOn);
   sw.querySelector('.tgl').classList.toggle('on', state.hideOn);
   sw.setAttribute('aria-checked', String(state.hideOn));
+  /* Justin's ask, 2026-09-14: always read as "Hidden (N)", not "Hide
+     Shovelware" that only grows a count once something's checked - N is 0
+     with the switch off rather than the label just dropping the number. */
   const inEffect = state.hideOn && state.hide.length > 0;
-  $('#hidelabel').textContent = inEffect ? `Hide Shovelware · ${state.hide.length}` : 'Hide Shovelware';
+  $('#hidelabel').textContent = `Hidden (${state.hideOn ? state.hide.length : 0})`;
   $('#hidebtn').classList.toggle('active', inEffect);
   $('#hidelist').classList.toggle('off', !state.hideOn);
 }
