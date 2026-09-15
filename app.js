@@ -1897,6 +1897,13 @@ function writeUrl() {
 }
 let lastListUrl = '#/';
 
+/* Remembers where a reader was scrolled when they clicked into a game, so the
+   browser Back button (or the detail page's own "← Library" link, which reuses
+   lastListUrl) can put them back there instead of dumping them at the top of a
+   long list. Keyed to the exact list URL they left from - see the restore
+   check below for why that guards against the tag-click case. */
+let listScroll = null;
+
 function route() {
   const hash = location.hash.replace(/^#/, '') || '/';
   const [path, qs] = hash.split('?');
@@ -1907,17 +1914,15 @@ function route() {
      of them at once - and the detail route below, which hides it separately. */
   if (!$('#stats').hidden) closeStats();
 
-  if (path.startsWith('/game/')) { renderDetail(path.slice(6)); return; }
+  if (path.startsWith('/game/')) {
+    if (state.mode === 'list') listScroll = { url: lastListUrl, y: window.scrollY, rendered: RENDERED };
+    renderDetail(path.slice(6));
+    return;
+  }
 
   document.title = 'Game Library';
-  /* Coming back from a game page, start at the top. Tags sit well down a long
-     detail page, so clicking one used to land you in the middle of the filtered
-     list with the filter bar off-screen above you - it read as "nothing
-     happened". Only on the detail -> list move: leave scroll alone when a
-     filter changes, or the page would jump under you mid-browse. */
   const cameFromDetail = state.mode === 'detail';
   state.mode = 'list';
-  if (cameFromDetail) window.scrollTo(0, 0);
   $('#browse').hidden = false;
   $('#sentinel').hidden = false;
   /* `/completions` still resolves. It was the tab's name until 2026-09-05 and
@@ -1952,6 +1957,23 @@ function route() {
   $('#q-clear').hidden = !state.q;
 
   sync();
+
+  /* Coming back from a game page: restore the scroll position we left at, but
+     only when this is genuinely the Back move - the URL matches exactly what
+     was on screen when the reader clicked in. A tag clicked ON the detail page
+     lands on a different filter and must NOT inherit that old scroll spot;
+     tags sit well down a long detail page, so it used to land mid-list with
+     the filter bar off-screen above - "nothing happened". That case still
+     falls through to the plain scrollTo(0, 0) it always used. */
+  if (cameFromDetail && listScroll && listScroll.url === lastListUrl) {
+    const target = listScroll;
+    listScroll = null;
+    while (RENDERED < target.rendered && RENDERED < RESULTS.length) renderMore();
+    window.scrollTo(0, target.y);
+  } else {
+    listScroll = null;
+    if (cameFromDetail) window.scrollTo(0, 0);
+  }
 }
 
 /* ---------------------------------------------------------------- boot */
