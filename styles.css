@@ -236,7 +236,7 @@ a{color:var(--blue)}
 /* ---------- rows ---------- */
 .rows{display:flex; flex-direction:column}
 .row{
-  display:grid; grid-template-columns:56px 1fr auto; gap:0 17px;
+  display:grid; grid-template-columns:56px 1fr auto auto; gap:0 17px;
   padding:14px 10px 14px 15px; border-bottom:1px solid var(--line);
   align-items:center; border-left:4px solid transparent; text-decoration:none; color:inherit;
 }
@@ -272,10 +272,33 @@ a{color:var(--blue)}
 .rright .plat{font-size:11.5px; color:var(--ink-3); white-space:nowrap}
 .rright .len{font-family:var(--mono); font-size:10.5px; color:var(--ink-4); white-space:nowrap}
 @media(max-width:620px){
-  .row{grid-template-columns:44px 1fr; padding-left:12px}
+  .row{grid-template-columns:44px 1fr auto; padding-left:12px}
   .cov{width:44px; height:60px}
   .rright{display:none}
 }
+
+/* ---------- priority-backlog star ---------- */
+/* Shared shape across the list row, grid card and detail page - only
+   position/size differ per context. Rendered for every viewer; `.ro`
+   (read-only, no admin token on this browser) is what makes a non-owner's
+   copy look inert rather than clickable-but-silent. Gold matches the
+   Sampled status colour - both read as "marked, not a failure state". */
+.starbtn{
+  border:0; background:transparent; cursor:pointer; font-size:19px; line-height:1;
+  color:var(--line-2); padding:2px; transition:color .12s ease, transform .12s ease;
+}
+.starbtn:hover{color:var(--gold-line); transform:scale(1.12)}
+.starbtn.on{color:var(--gold)}
+.starbtn.ro{cursor:default}
+.starbtn.ro:hover{transform:none}
+.starbtn.ro:not(.on):hover{color:var(--line-2)}
+.row .starbtn{align-self:center}
+.card-art .starbtn{
+  position:absolute; top:4px; right:6px; z-index:1;
+  text-shadow:0 1px 3px rgba(29,42,58,.5);
+}
+.card-art .starbtn:not(.on){color:rgba(255,255,255,.55)}
+.statusline .starbtn{font-size:17px; margin-left:2px}
 
 /* ---------- grid view ---------- */
 /* Uniform tiles, art as the hero. `auto-fill` rather than `auto-fit` so a

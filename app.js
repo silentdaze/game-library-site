@@ -15,6 +15,104 @@ const $ = s => document.querySelector(s);
 const el = (t, c, txt) => { const n = document.createElement(t); if (c) n.className = c; if (txt != null) n.textContent = txt; return n; };
 const esc = s => String(s == null ? '' : s);
 
+/* ---- Priority-backlog starring (2026-09-16) -----------------------------
+   Site-only feature - NOT a workbook column. `Backlog Priority` (axis 12)
+   has sat empty in the workbook for the whole project; this replaces it
+   with a tiny Cloudflare Worker + KV store so a star follows Justin across
+   devices. Reads are public (so the star already shown to a browsing friend
+   is real data, not a placeholder); writes need an admin token so only
+   Justin can ever change one. Proposed to chat in RETURN_TO_CHAT.md for
+   retiring the workbook axis - not yet decided, so export_json.py simply
+   stops emitting it rather than assuming the answer.
+
+   Fails soft everywhere it touches the rest of the app: if the Worker is
+   unreachable, STARS just stays empty and every other feature is unaffected. */
+const STARS_API = 'https://REPLACE-WITH-WORKER-URL.workers.dev/stars';
+const STAR_TOKEN_KEY = 'gl.admin.token';
+
+/* The "slicker" login: a one-time `?admin=<token>` link saves the token to
+   this browser's localStorage and scrubs it from the address bar so it
+   never sits in history in plain text. Every later visit, from any tab,
+   just reads localStorage - there is no login screen and nothing to expire. */
+function readAdminToken() {
+  try {
+    const params = new URLSearchParams(location.search);
+    const fromUrl = params.get('admin');
+    if (fromUrl) {
+      localStorage.setItem(STAR_TOKEN_KEY, fromUrl);
+      params.delete('admin');
+      const rest = params.toString();
+      history.replaceState(null, '', location.pathname + (rest ? '?' + rest : '') + location.hash);
+    }
+    return localStorage.getItem(STAR_TOKEN_KEY) || '';
+  } catch (e) { return ''; }
+}
+const ADMIN_TOKEN = readAdminToken();
+const IS_ADMIN = !!ADMIN_TOKEN;
+
+let STARS = new Set();
+let starsReady = null;
+/* Fetched once at boot, alongside library.json - see the bottom of this
+   file. A failed fetch leaves STARS empty rather than blocking the app;
+   browsing works with or without the Worker up. */
+function loadStars() {
+  if (!starsReady) {
+    starsReady = fetch(STARS_API)
+      .then(r => r.ok ? r.json() : { ids: [] })
+      .then(d => { STARS = new Set(d.ids || []); })
+      .catch(() => { STARS = new Set(); });
+  }
+  return starsReady;
+}
+
+/* Optimistic toggle: flips the local set and every visible star button for
+   this id immediately, then confirms with the Worker. A failed write rolls
+   both back rather than leaving the button lying about what's actually
+   saved - the KV store, not the DOM, is the source of truth. */
+function setStar(id, starred) {
+  if (!IS_ADMIN) return;
+  if (STARS.has(id) === starred) return;
+  if (starred) STARS.add(id); else STARS.delete(id);
+  paintStarButtons(id, starred);
+  fetch(STARS_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ADMIN_TOKEN },
+    body: JSON.stringify({ id, starred })
+  }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); })
+    .catch(() => {
+      if (starred) STARS.delete(id); else STARS.add(id);
+      paintStarButtons(id, !starred);
+    });
+}
+
+function paintStarButtons(id, on) {
+  document.querySelectorAll('[data-star-id="' + CSS.escape(id) + '"]').forEach(btn => paintStar(btn, on));
+}
+function paintStar(btn, on) {
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', String(on));
+  btn.title = IS_ADMIN
+    ? (on ? 'Remove from priority backlog' : 'Add to priority backlog')
+    : (on ? 'In priority backlog' : 'Priority backlog (read-only)');
+}
+/* Rendered for every viewer, admin or not, so a friend browsing sees the
+   real star state - only the disabled attribute (and the missing click
+   handler) differs, which is what makes it read as read-only rather than
+   as a control that silently does nothing when clicked. */
+function starButton(id) {
+  const b = el('button', 'starbtn' + (IS_ADMIN ? '' : ' ro'));
+  b.type = 'button';
+  b.dataset.starId = id;
+  b.disabled = !IS_ADMIN;
+  b.setAttribute('aria-label', 'Priority backlog');
+  b.textContent = '★';
+  paintStar(b, STARS.has(id));
+  if (IS_ADMIN) {
+    b.onclick = e => { e.preventDefault(); e.stopPropagation(); setStar(id, !STARS.has(id)); };
+  }
+  return b;
+}
+
 /* Owning tokens - handoff 3.2. Never test for the bare "Owned" token. */
 
 /* Handoff 3.3b: `Status` has FIVE values, not four. `Sampled` arrived at v73,
@@ -502,7 +600,7 @@ function passes(g) {
        of the statuses that happen to exist today. A sixth value joins it on its
        own - handoff 3.3b. */
     if (s === 'played') { if (!g.status || g.status === 'Unplayed') return false; }
-    else if (s === 'backlog') { if (!g.backlog) return false; }
+    else if (s === 'backlog') { if (!STARS.has(g.id)) return false; }
     else if (g.status !== s) return false;
   }
   /* Link-only filters. `series` used to fall through to a text search; it is a
@@ -662,6 +760,7 @@ function rowNode(r) {
   if (g.platforms && g.platforms.length) right.appendChild(el('span', 'plat', simplifyPlatforms(g.platforms).slice(0, 2).join(' · ')));
   if (g.length && g.length.length) right.appendChild(el('span', 'len', g.length[0]));
   a.appendChild(right);
+  a.appendChild(starButton(g.id));
   return a;
 }
 
@@ -699,6 +798,7 @@ function cardNode(r) {
     art.appendChild(img);
   }
   if (sl) art.appendChild(el('span', 'card-chip ' + sl.cls, shortStatus(g)));
+  art.appendChild(starButton(g.id));
   a.appendChild(art);
 
   const ov = el('div', 'card-ov');
@@ -963,6 +1063,7 @@ function renderDetail(id) {
      happens whenever nothing more specific was on record. `Yakuza 0` showed
      "Not owned" twice for exactly this reason. */
   if (g.access && g.access !== ownedText) st.appendChild(el('span', 'spill', g.access));
+  st.appendChild(starButton(g.id));
   dt.appendChild(st);
   dt.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
   head.appendChild(dt);
@@ -1380,7 +1481,7 @@ function buildFilters() {
       if (d) { rows.push({ value: d.value, label: d.value, count: d.count }); byValue.delete(v); }
     });
     byValue.forEach(d => rows.push({ value: d.value, label: d.value, count: d.count }));
-    rows.push({ value: 'backlog', label: 'Priority backlog', count: null });
+    rows.push({ value: 'backlog', label: '★ Priority backlog', count: STARS.size || null });
     return rows;
   };
   mkDropdown('status', 'Status', statusRows, state.status, 'Any status',
@@ -1987,9 +2088,14 @@ function route() {
    The publish stamps a content hash onto this script's own URL, so reading it
    back off `document.currentScript` ties the payload to exactly the code that
    asked for it. No hash locally, where the query is absent and this is a no-op. */
-fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
-  .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
-  .then(d => {
+Promise.all([
+  fetch('data/library.json' + (ASSET_V ? '?v=' + ASSET_V : ''))
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+  /* Never lets a slow/unreachable Worker block the library from loading -
+     loadStars() always resolves, empty set on failure. */
+  loadStars()
+])
+  .then(([d]) => {
     DATA = d; META = d.meta; GAMES = d.games;
     buildIndex();
     const c = META.counts;
