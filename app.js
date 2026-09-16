@@ -1481,7 +1481,7 @@ function buildFilters() {
       if (d) { rows.push({ value: d.value, label: d.value, count: d.count }); byValue.delete(v); }
     });
     byValue.forEach(d => rows.push({ value: d.value, label: d.value, count: d.count }));
-    rows.push({ value: 'backlog', label: '★ Priority backlog', count: STARS.size || null });
+    rows.push({ value: 'backlog', label: 'Priority Backlog', count: STARS.size || null });
     return rows;
   };
   mkDropdown('status', 'Status', statusRows, state.status, 'Any status',

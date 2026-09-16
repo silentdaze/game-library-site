@@ -295,9 +295,17 @@ a{color:var(--blue)}
 .row .starbtn{align-self:center}
 .card-art .starbtn{
   position:absolute; top:4px; right:6px; z-index:1;
-  text-shadow:0 1px 3px rgba(29,42,58,.5);
+  text-shadow:0 1px 3px rgba(29,42,58,.6);
 }
 .card-art .starbtn:not(.on){color:rgba(255,255,255,.55)}
+/* Brighter than the list/detail gold - those sit on the page's own pale
+   background, but this one has to read against any cover art in the
+   library, including art that's already gold or yellow itself. A stronger
+   shadow plus a warm glow keeps it legible rather than just louder. */
+.card-art .starbtn.on{
+  color:#ffce33;
+  text-shadow:0 1px 3px rgba(29,42,58,.75), 0 0 6px rgba(29,42,58,.45);
+}
 .statusline .starbtn{font-size:17px; margin-left:2px}
 
 /* ---------- grid view ---------- */
