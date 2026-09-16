@@ -278,17 +278,22 @@ a{color:var(--blue)}
 }
 
 /* ---------- priority-backlog star ---------- */
-/* Shared shape across the list row, grid card and detail page - only
-   position/size differ per context. Rendered for every viewer; `.ro`
+/* Shared shape AND colour across the list row, grid card and detail page -
+   only position/size differ per context. Rendered for every viewer; `.ro`
    (read-only, no admin token on this browser) is what makes a non-owner's
-   copy look inert rather than clickable-but-silent. Gold matches the
-   Sampled status colour - both read as "marked, not a failure state". */
+   copy look inert rather than clickable-but-silent.
+
+   One bright yellow everywhere - it used to be the site's muted --gold (the
+   Sampled status colour) on the list/detail page and a brighter one on the
+   grid card, because the card has to read against arbitrary cover art. That
+   split just looked like two different features - Justin's call, 2026-09-16:
+   use the brighter one everywhere. */
 .starbtn{
   border:0; background:transparent; cursor:pointer; font-size:19px; line-height:1;
   color:var(--line-2); padding:2px; transition:color .12s ease, transform .12s ease;
 }
-.starbtn:hover{color:var(--gold-line); transform:scale(1.12)}
-.starbtn.on{color:var(--gold)}
+.starbtn:hover{color:#ffce33; transform:scale(1.12)}
+.starbtn.on{color:#ffce33; text-shadow:0 0 6px rgba(138,100,19,.35)}
 .starbtn.ro{cursor:default}
 .starbtn.ro:hover{transform:none}
 .starbtn.ro:not(.on):hover{color:var(--line-2)}
@@ -298,14 +303,7 @@ a{color:var(--blue)}
   text-shadow:0 1px 3px rgba(29,42,58,.6);
 }
 .card-art .starbtn:not(.on){color:rgba(255,255,255,.55)}
-/* Brighter than the list/detail gold - those sit on the page's own pale
-   background, but this one has to read against any cover art in the
-   library, including art that's already gold or yellow itself. A stronger
-   shadow plus a warm glow keeps it legible rather than just louder. */
-.card-art .starbtn.on{
-  color:#ffce33;
-  text-shadow:0 1px 3px rgba(29,42,58,.75), 0 0 6px rgba(29,42,58,.45);
-}
+.card-art .starbtn.on{text-shadow:0 1px 3px rgba(29,42,58,.75), 0 0 6px rgba(29,42,58,.45)}
 .statusline .starbtn{font-size:17px; margin-left:2px}
 
 /* ---------- grid view ---------- */
