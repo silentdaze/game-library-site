@@ -27,7 +27,7 @@ const esc = s => String(s == null ? '' : s);
 
    Fails soft everywhere it touches the rest of the app: if the Worker is
    unreachable, STARS just stays empty and every other feature is unaffected. */
-const STARS_API = 'https://REPLACE-WITH-WORKER-URL.workers.dev/stars';
+const STARS_API = 'https://game-library-stars.jgraz.workers.dev/stars';
 const STAR_TOKEN_KEY = 'gl.admin.token';
 
 /* The "slicker" login: a one-time `?admin=<token>` link saves the token to
