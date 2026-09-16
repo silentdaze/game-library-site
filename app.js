@@ -1214,7 +1214,13 @@ function renderDetail(id) {
         const match = GAMES.find(x => x.title === v);
         if (match) { const a = el('a', null, v); a.href = '#/game/' + match.id; li.appendChild(a); }
         else li.append(v);
-        if (key === 'contains' && doneMap[v]) li.appendChild(el('span', 'done', '✓ ' + doneMap[v]));
+        /* `Parts Completed` can name an `Other Versions Owned` entry too, not
+           just a `Contains` component - Trine 4: The Nightmare Prince is
+           genuinely beaten and is also the pre-merge edition now listed here.
+           Same checkmark, same doneMap, just not scoped to Contains alone. */
+        if ((key === 'contains' || key === 'otherVersions') && doneMap[v]) {
+          li.appendChild(el('span', 'done', '✓ ' + doneMap[v]));
+        }
         /* Justin's ask, in his words: "if I own one part of a complete
            collection on GOG, it should say that in the Contains section."
            Blank means the part comes only with the box, which is the common
