@@ -1197,7 +1197,12 @@ function renderDetail(id) {
     const doneMap = {};
     (g.partsCompleted || []).forEach(p => {
       const i = p.lastIndexOf(' - ');
-      if (i > 0) doneMap[p.slice(0, i).trim()] = p.slice(i + 3).trim();
+      /* simplifyPlatform() here, same as `Played On` and Contains' "also
+         owned on" already get - Justin's ask, 2026-09-17, noticed on
+         Guacamelee: the completion checkmark should read "PC", not the raw
+         "PC (Windows)" workbook value; for a completion he only cares which
+         platform, not the storefront-flavored spelling of it. */
+      if (i > 0) doneMap[p.slice(0, i).trim()] = simplifyPlatform(p.slice(i + 3).trim());
     });
     rels.forEach(([key, label, hint]) => {
       if (key === 'partsCompleted' && (g.contains || []).length) return;
