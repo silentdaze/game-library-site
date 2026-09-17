@@ -1205,16 +1205,32 @@ function renderDetail(id) {
       if (i > 0) doneMap[p.slice(0, i).trim()] = simplifyPlatform(p.slice(i + 3).trim());
     });
     rels.forEach(([key, label, hint]) => {
-      if (key === 'partsCompleted' && (g.contains || []).length) return;
+      /* The standalone Parts Completed box is redundant whenever Contains OR
+         Other Versions Owned is showing - both already carry the same fact
+         as a "✓ <date>" checkmark right next to the part/edition it belongs
+         to (see doneMap above). Justin's ask, 2026-09-17, noticed on
+         Guacamelee: with Other Versions Owned showing "Guacamelee! Gold
+         Edition ✓ PC (Q3 2014)", a separate "Parts Completed: Guacamelee!
+         Gold Edition - PC (Windows) (Q3 2014)" box underneath is just the
+         same fact twice, in the least-simplified spelling of the two. */
+      if (key === 'partsCompleted' && ((g.contains || []).length || (g.otherVersions || []).length)) return;
       const b = el('div', 'relbox');
       const rh = el('div', 'rh'); rh.appendChild(el('b', null, label)); rh.appendChild(el('i', null, hint));
       b.appendChild(rh);
       const ul = el('ul');
       g[key].forEach(entry => {
         /* `contains` and `otherVersions` entries are objects; every other
-           relationship column is still a plain string. */
+           relationship column is still a plain string. `partsCompleted`
+           itself is "Name - Platform (Date)" and only reaches this render at
+           all when neither box above already showed it - same platform
+           simplification as doneMap, so it never shows the raw "PC
+           (Windows)" spelling either. */
         const isObj = key === 'contains' || key === 'otherVersions';
-        const v = isObj ? entry.name : entry;
+        let v = isObj ? entry.name : entry;
+        if (key === 'partsCompleted') {
+          const i = v.lastIndexOf(' - ');
+          if (i > 0) v = v.slice(0, i + 3) + simplifyPlatform(v.slice(i + 3));
+        }
         const li = el('li');
         const match = GAMES.find(x => x.title === v);
         if (match) { const a = el('a', null, v); a.href = '#/game/' + match.id; li.appendChild(a); }
