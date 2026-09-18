@@ -2251,6 +2251,25 @@ Promise.all([
       if (es[0].isIntersecting && RENDERED < RESULTS.length) renderMore();
     }, { rootMargin: '600px' }).observe($('#sentinel'));
 
+    /* Back to top - shows once there's actually somewhere to jump back from.
+       One shared button rather than one per view: the library list, the
+       Played list and a long detail page (dozens of tags, a big Contains
+       box) all get the same threshold and the same button. `scroll` fires far
+       more often than the button's own visibility needs to update, so the
+       toggle is gated behind a single `requestAnimationFrame` per scroll
+       burst rather than running on every event. */
+    const totop = $('#totop');
+    let totopTicking = false;
+    window.addEventListener('scroll', () => {
+      if (totopTicking) return;
+      totopTicking = true;
+      requestAnimationFrame(() => {
+        totop.classList.toggle('show', window.scrollY > 600);
+        totopTicking = false;
+      });
+    }, { passive: true });
+    totop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+
     /* Stats opens WITHOUT changing the hash (see the statsbtn handler above),
        so clicking the wordmark while already sitting on the plain "#/" hash
        - the common case, opening stats straight from the Library tab - fires

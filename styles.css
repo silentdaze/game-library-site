@@ -618,3 +618,23 @@ a.bar:hover .bf{background:var(--blue)}
 .desc strong,.desc b{ color:var(--ink-1); font-weight:600 }
 .desc blockquote{ margin:0 0 10px; padding-left:12px; border-left:2px solid var(--line-2);
        color:var(--ink-3) }
+
+/* ---------- back to top ---------- */
+/* Floating over everything, bottom-right - only shown once there's actually
+   somewhere to jump back FROM. Justin's ask, 2026-09-18: some views (the
+   untouched library, an unhidden itch.io bundle shelf) scroll for a long time
+   before the search bar and filters are visible again. */
+.totop{
+  position:fixed; right:22px; bottom:22px; z-index:30;
+  width:46px; height:46px; border-radius:50%; padding:0;
+  background:var(--panel); border:1px solid var(--line-2); color:var(--ink-3);
+  box-shadow:var(--sh-lg); cursor:pointer;
+  display:flex; align-items:center; justify-content:center;
+  opacity:0; transform:translateY(10px); pointer-events:none;
+  transition:opacity .18s ease, transform .18s ease, border-color .15s, color .15s;
+}
+.totop.show{opacity:1; transform:none; pointer-events:auto}
+.totop:hover{border-color:var(--blue-mid); color:var(--blue)}
+@media(max-width:620px){
+  .totop{right:14px; bottom:14px; width:42px; height:42px}
+}
