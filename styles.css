@@ -408,6 +408,12 @@ a{color:var(--blue)}
 .tagl{font-size:12.5px; padding:3px 11px; border-radius:20px; text-decoration:none; background:var(--panel); border:1px solid var(--line-2); color:var(--ink-2)}
 .tagl:hover{background:var(--blue-soft); border-color:var(--blue-mid); color:var(--blue)}
 .tagl.shelf{background:var(--panel-2); border-style:dashed}
+/* A store holding only part of a collection (see the Stores block in
+   renderDetail). Dashed is the site's existing "partial / dependent" mark -
+   the Category dropdown and Switch shelf pills use it - so it reads the same
+   here. Not struck through: that says "no longer owned", which is false. */
+.tagl.partial{background:transparent; border-style:dashed; border-color:var(--ink-4); color:var(--ink-3)}
+.partnote{align-self:center; font-size:11px; color:var(--ink-4)}
 
 /* Complete edition badge - workbook column 43, v94. It answers one question:
    of the several stores this game is owned on, which one holds the FULL copy.

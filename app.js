@@ -1114,12 +1114,32 @@ function renderDetail(id) {
        - this only fires for the gwg-only case. */
     const xboxCats = (g.categories || {}).xbox || [];
     const gwgOnly = xboxCats.length === 1 && xboxCats[0] === 'gwg';
+    /* A store holding only PART of a collection gets a dashed pill. The rule
+       is the chat's (handoff v229): wherever `Complete Edition On` is filled,
+       every store NOT named in it is partial. Deliberately not derived from
+       the `Contains` suffixes - that guess misfires on Tomb Raider I-III,
+       where Steam holds a component AND the full set. Blank `Complete Edition
+       On` is the normal case and means nothing here: no pill goes dashed. */
+    const full = g.completeEditionOn || [];
     g.stores.forEach(s => {
       const isGwgXbox = s === 'Xbox' && gwgOnly;
-      const a = el('a', 'tagl', isGwgXbox ? 'Subscription' : s);
+      const partial = full.length > 0 && !full.includes(s);
+      const a = el('a', 'tagl' + (partial ? ' partial' : ''), isGwgXbox ? 'Subscription' : s);
       a.href = isGwgXbox ? '#/?store=Xbox&category=gwg' : '#/?store=' + encodeURIComponent(s);
+      if (partial) {
+        /* Name the part when `Contains` records it (Google Play -> "Sonic CD");
+           otherwise say so generically - SEGA's eShop copy is partial because
+           the Switch release lacks the PC-only games, which no suffix names. */
+        const parts = (g.contains || []).filter(c => (c.ownedOn || []).includes(s)).map(c => c.name);
+        a.title = parts.length ? 'Only ' + parts.join(', ') : 'Only part of this collection';
+      }
       wrapper.appendChild(a);
     });
+    /* The tooltip never fires on a phone, so the dashed style gets a one-line
+       key beside it - only on the handful of rows that actually use it. */
+    if (full.length && g.stores.some(s => !full.includes(s))) {
+      wrapper.appendChild(el('span', 'partnote', 'dashed = only part of the collection'));
+    }
     kv(dl1, 'Stores', wrapper);
   }
   /* Complete Edition On - workbook column 43, added at v94 for exactly one
