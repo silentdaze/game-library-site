@@ -298,6 +298,28 @@ const optSort = loadOptSort();
    Played is the default - it is the more interesting question, and the one the
    whole-library figures at the top of the page do not answer. */
 let statsScope = 'played';
+/* The year opened on the Stats page's year chart, or ''. Lives in the URL
+   (#/stats?year=2019) so Back from a game in that year's list reopens it. */
+let statsYear = '';
+/* The Stats page has its own address as of 2026-09-29 - Justin: "any time I
+   click back I want to return to what I was just looking at, not home". It
+   used to open over the library without touching the hash, so there was no
+   history entry for Back to land on. */
+let lastStatsUrl = '#/stats';
+let statsScroll = null;
+let statsFresh = false;
+
+/* Replace, never push: the tab and the open year are state ON the page, not
+   a new page. Back from a game still lands on them because they are in the
+   entry being replaced. */
+function writeStatsUrl() {
+  const p = new URLSearchParams();
+  if (statsScope !== 'played') p.set('scope', statsScope);
+  if (statsYear) p.set('year', statsYear);
+  const next = '#/stats' + (p.toString() ? '?' + p : '');
+  lastStatsUrl = next;
+  if (next !== location.hash) history.replaceState(null, '', next);
+}
 
 const SORTS = {
   title:     { label: 'A\u2013Z',    rev: 'Z\u2013A',   name: 'Alphabetical' },
@@ -1005,7 +1027,8 @@ function renderDetail(id) {
   /* The last library URL actually visited, filters and search intact - never
      a hardcoded '#/'. Justin's ask, 2026-09-10: this link used to reset to the
      bare homepage no matter what was filtered when you left it. */
-  const back = el('a', null, '← Library'); back.href = lastListUrl;
+  const back = el('a', null, backFromDetail ? backFromDetail.label : '← Library');
+  back.href = backFromDetail ? backFromDetail.href : lastListUrl;
   crumb.appendChild(back);
   view.appendChild(crumb);
 
@@ -1599,7 +1622,7 @@ function renderSortMenu() {
     b.onclick = () => {
       if (state.sort === key) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
       else { state.sort = key; state.dir = key === 'title' ? 'asc' : 'desc'; }
-      renderSortMenu(); updateSortLabel(); compute(); writeUrl();
+      renderSortMenu(); updateSortLabel(); compute(); writeUrl('push');
     };
     m.appendChild(b);
   });
@@ -1743,8 +1766,10 @@ function playedByYear() {
 
   const show = (y, btn) => {
     wrap.querySelectorAll('.col.on').forEach(x => x.classList.remove('on'));
-    if (open === y) { open = null; detail.hidden = true; detail.replaceChildren(); return; }
+    if (open === y) { open = null; statsYear = ''; detail.hidden = true; detail.replaceChildren(); writeStatsUrl(); return; }
     open = y;
+    statsYear = y;
+    writeStatsUrl();
     btn.classList.add('on');
     const games = byYear.get(y).slice().sort((a, b) =>
       quarterKey(a.completed) - quarterKey(b.completed) || a.title.localeCompare(b.title));
@@ -1803,6 +1828,9 @@ function playedByYear() {
   }
   box.appendChild(wrap);
   box.appendChild(detail);
+  const again = statsYear && wrap.querySelector(`button.col[aria-label^="${statsYear}:"]`);
+  if (again) show(statsYear, again);
+  else statsYear = '';
   return box;
 }
 
@@ -1883,7 +1911,7 @@ function renderStats() {
       const b = el('button', 'stab' + (statsScope === id ? ' on' : ''));
       b.appendChild(el('b', null, label));
       b.appendChild(el('span', null, n.toLocaleString() + ' games'));
-      b.onclick = () => { statsScope = id; drawScope(); };
+      b.onclick = () => { statsScope = id; drawScope(); writeStatsUrl(); };
       tabs.appendChild(b);
     });
     scopeWrap.appendChild(tabs);
@@ -2032,6 +2060,29 @@ function renderStats() {
   h.appendChild(sheet);
 }
 
+/* Stats is a route (#/stats). Opened fresh from the button it starts at the
+   top; reached by Back or Forward it returns to where he left it, tab, open
+   year and scroll position included. */
+function openStats(params) {
+  const h = $('#stats');
+  statsScope = params.get('scope') === 'logged' ? 'logged' : 'played';
+  statsYear = params.get('year') || '';
+  state.mode = 'stats';
+  document.title = 'Stats — Game Library';
+  renderStats();
+  h.hidden = false;
+  $('#browse').hidden = true;
+  $('#view').replaceChildren();
+  $('#sentinel').hidden = true;
+  $('#statsbtn').classList.add('on');
+  $('#statsbtn').setAttribute('aria-expanded', 'true');
+  writeStatsUrl();
+  const back = !statsFresh && statsScroll && statsScroll.url === lastStatsUrl;
+  window.scrollTo(0, back ? statsScroll.y : 0);
+  statsFresh = false;
+  statsScroll = null;
+}
+
 /* Every exit from the stats page goes through here, so the button state, the
    panel and the browse bar can never disagree with each other. */
 function closeStats() {
@@ -2045,15 +2096,19 @@ function closeStats() {
 
 /* ---------------------------------------------------------------- routing */
 
-function sync(pushUrl) {
+/* `how`: omitted = a user changed something, so it is a new history step
+   (Back undoes it); 'replace' = route() re-applying a URL that is already in
+   history; false = don't touch the URL. Every filter used to replace, so Back
+   skipped straight past every filter change to whatever came before. */
+function sync(how) {
   buildFilters();
   compute();
-  if (pushUrl !== false) writeUrl();
+  if (how !== false) writeUrl(how === 'replace' ? 'replace' : 'push');
 }
 
 /* Keep the address bar in step with the filters, without re-routing. */
 let writing = false;
-function writeUrl() {
+function writeUrl(how) {
   const p = new URLSearchParams();
   if (state.q) p.set('q', state.q);
   if (state.platform) p.set('platform', state.platform);
@@ -2086,11 +2141,13 @@ function writeUrl() {
   lastListUrl = next;
   if (next !== location.hash) {
     writing = true;
-    history.replaceState(null, '', next);
+    if (how === 'push') history.pushState(null, '', next);
+    else history.replaceState(null, '', next);
     writing = false;
   }
 }
 let lastListUrl = '#/';
+let backFromDetail = null;
 
 /* Remembers where a reader was scrolled when they clicked into a game, so the
    browser Back button (or the detail page's own "← Library" link, which reuses
@@ -2107,10 +2164,20 @@ function route() {
   /* Every number on the Stats page is a link into the library, so leaving it by
      clicking one is the normal path, not an edge case. Closing here covers all
      of them at once - and the detail route below, which hides it separately. */
+  const leftStats = state.mode === 'stats';
+  if (leftStats) statsScroll = { url: lastStatsUrl, y: window.scrollY };
   if (!$('#stats').hidden) closeStats();
+
+  if (path === '/stats') {
+    openStats(params);
+    return;
+  }
 
   if (path.startsWith('/game/')) {
     if (state.mode === 'list') listScroll = { url: lastListUrl, y: window.scrollY, rendered: RENDERED };
+    /* The game page's own back link goes wherever he came from. */
+    if (leftStats) backFromDetail = { href: lastStatsUrl, label: '← Stats' };
+    else if (state.mode === 'list') backFromDetail = null;
     renderDetail(path.slice(6));
     return;
   }
@@ -2151,7 +2218,8 @@ function route() {
   $('#q').value = state.q;
   $('#q-clear').hidden = !state.q;
 
-  sync();
+  sync('replace');
+  if (leftStats) window.scrollTo(0, 0);
 
   /* Coming back from a game page: restore the scroll position we left at, but
      only when this is genuinely the Back move - the URL matches exactly what
@@ -2224,9 +2292,14 @@ Promise.all([
       state.q = e.target.value;
       $('#q-clear').hidden = !state.q;
       clearTimeout(timer);
-      timer = setTimeout(() => { compute(); writeUrl(); }, 120);
+      /* Starting a search is a step Back should undo; every keystroke after
+         that refines the same step rather than adding one per letter. */
+      timer = setTimeout(() => {
+        const prevQ = new URLSearchParams(location.hash.split('?')[1] || '').get('q') || '';
+        compute(); writeUrl(prevQ ? 'replace' : 'push');
+      }, 120);
     });
-    $('#q-clear').onclick = () => { state.q = ''; $('#q').value = ''; $('#q-clear').hidden = true; compute(); $('#q').focus(); };
+    $('#q-clear').onclick = () => { state.q = ''; $('#q').value = ''; $('#q-clear').hidden = true; compute(); writeUrl('push'); $('#q').focus(); };
 
     $('#sortbtn').onclick = e => {
       e.stopPropagation();
@@ -2285,32 +2358,9 @@ Promise.all([
        why the browse bar goes away while it is up rather than sitting above it
        filtering a list nobody can see. */
     $('#statsbtn').onclick = () => {
-      const h = $('#stats');
-      if (!h.hidden) { closeStats(); sync(); return; }
-
-      const open = () => {
-        renderStats();
-        h.hidden = false;
-        $('#browse').hidden = true;
-        $('#view').replaceChildren();
-        $('#sentinel').hidden = true;
-        $('#statsbtn').classList.add('on');
-        $('#statsbtn').setAttribute('aria-expanded', 'true');
-        window.scrollTo(0, 0);
-      };
-
-      if (state.mode === 'detail') {
-        /* Leave the game page first, and open only once that navigation has
-           landed. Setting the hash routes ASYNCHRONOUSLY, and route() closes the
-           stats page - so opening first meant our own navigation immediately
-           undid it. The listener is registered before the hash is set and runs
-           after the app's own hashchange handler, which is what orders these
-           two correctly. */
-        window.addEventListener('hashchange', open, { once: true });
-        location.hash = '#/';
-      } else {
-        open();
-      }
+      if (state.mode === 'stats') { location.hash = lastListUrl; return; }
+      statsFresh = true;
+      location.hash = '#/stats';
     };
 
     new IntersectionObserver(es => {
@@ -2337,12 +2387,6 @@ Promise.all([
     }, { passive: true });
     totop.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
 
-    /* Stats opens WITHOUT changing the hash (see the statsbtn handler above),
-       so clicking the wordmark while already sitting on the plain "#/" hash
-       - the common case, opening stats straight from the Library tab - fires
-       no hashchange event at all and route() never runs. Close stats here
-       explicitly rather than relying on the link's own navigation to do it. */
-    $('.wordmark').addEventListener('click', () => { if (!$('#stats').hidden) { closeStats(); sync(); } });
 
     window.addEventListener('hashchange', () => { if (!writing) route(); });
     route();
