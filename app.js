@@ -563,7 +563,7 @@ const STATUS_GLOSS = {
   'Abandoned': 'means a game that did have an ending, and I stopped before reaching it.',
   'Sampled': 'means a collection I dipped into that was never something to finish.',
   'Retired': 'means a game with no ending to reach — I stopped, but there was never a finish line.',
-  'In Progress': 'means a collection I am partway through.'
+  'In Progress': 'means a game or collection I am partway through.'
 };
 
 function passes(g) {
@@ -639,53 +639,36 @@ function compute() {
   renderMore();
 }
 
-/* Handoff 3.3 asks for this fact prominently, and calls it the clearest proof
+/* Handoff 3.3 asks for the never-owned fact, and calls it the clearest proof
    the ownership model earns its complexity. Every number is read off the
    payload - handoff 7's rule is derive, don't string-replace, and it applies to
    prose as much as to formulas. This exact sentence has already drifted once
    (58 of 504 survived into three places in the v71 handoff after the real
    figure moved), so it is computed here and written down nowhere.
 
-   It used to sit on top of the Completions list. It lives on the Stats page
-   now - Justin's call - because it is a fact ABOUT the collection, not a
-   caption the list needed every time he opened it. */
-function playedFacts() {
+   It was a big green banner at the top of the Stats page until 2026-09-29.
+   Justin's call: the statuses are a bar chart now ("What I've played"), and
+   the definitions only need to be findable, so they are small print at the
+   foot of the page. Built from META.statuses, so a seventh status needs a
+   STATUS_GLOSS line and nothing else. */
+function statusNotes() {
   const c = META.counts;
-  const b = el('div', 'cbanner');
+  const box = el('div', 'snotes');
   const p1 = el('p');
-  p1.appendChild(el('b', null,
-    `${c.beatenNeverOwned} of my ${c.beaten.toLocaleString()} completions are on games I've never owned`));
+  p1.appendChild(el('b', null, 'Beaten'));
+  p1.append(` includes ${c.beatenNeverOwned} ${c.beatenNeverOwned === 1 ? 'game' : 'games'} I've never owned`);
   const by = (META.neverOwnedBy || []).map(d => `${d.count} ${d.label}`).join(', ');
-  if (by) p1.append(` — ${by}.`);
-  b.appendChild(p1);
-
-  /* Say why the Played view holds more rows than the Beaten count, rather than
-     letting the two numbers look like a bug.
-
-     Built from META.statuses - every status the workbook actually carries,
-     minus Beaten and Unplayed - so it needs no list of its own. That is what
-     let `Abandoned` join the view without touching this function: it was
-     already being computed, it had simply been filtered out upstream. */
-  const extra = (META.statuses || [])
-    .filter(d => d.value !== 'Beaten' && d.value !== 'Unplayed' && d.count)
-    .map(d => ({ st: d.value, n: d.count }));
-  if (extra.length) {
-    const p2 = el('p', 'sub');
-    const list = extra.map(e => `${e.n} ${e.st.toLowerCase()}`);
-    const phrase = list.length > 1
-      ? list.slice(0, -1).join(', ') + ' and ' + list[list.length - 1]
-      : list[0];
-    p2.append(`Also here: ${phrase} — all of them real play history.`);
-    extra.forEach(e => {
-      const gloss = STATUS_GLOSS[e.st];
-      if (!gloss) return;
-      p2.append(' ');
-      p2.appendChild(el('b', null, e.st));
-      p2.append(' ' + gloss);
+  p1.append(by ? ` — ${by}.` : '.');
+  box.appendChild(p1);
+  (META.statuses || [])
+    .filter(d => d.count && STATUS_GLOSS[d.value])
+    .forEach(d => {
+      const p = el('p');
+      p.appendChild(el('b', null, d.value));
+      p.append(' ' + STATUS_GLOSS[d.value]);
+      box.appendChild(p);
     });
-    b.appendChild(p2);
-  }
-  return b;
+  return box;
 }
 
 /* ---------------------------------------------------------------- render */
@@ -1679,8 +1662,6 @@ function updateHideLabel() {
   $('#hidelist').classList.toggle('off', !state.hideOn);
 }
 
-/* ---------------------------------------------------------------- health */
-
 /* ---------------------------------------------------------------- stats */
 
 /* A ranked bar list: one measure, one hue, sorted. The form comes first and
@@ -1724,28 +1705,83 @@ function statPanel(title, note, body) {
   return d;
 }
 
-/* Completions per year, off the `Completed` quarter on every played row.
+/* Games beaten per year, off the `Completed` quarter on every Beaten row.
+
+   Beaten ONLY, as of 2026-09-29. It used to count every played row with a
+   date, which quietly put the 11 Abandoned rows in "games finished" - and on an
+   Abandoned row `Completed` is when he STOPPED. Retired and Sampled dates are
+   not finishes either. They all still have their own bars in "What I've
+   played", and their own dates on their game pages.
 
    Change-over-time, so it is columns rather than a ranked list. One series, so
-   no legend. Only the peak is direct-laballed - a number over every column is
-   the classic way to make a small chart unreadable; the rest are on hover. */
-function completionsByYear() {
+   no legend. Only the peak is direct-labelled - a number over every column is
+   the classic way to make a small chart unreadable; the rest are on hover.
+
+   Every column is a button (Justin's ask): it opens that year's list right
+   under the chart, grouped by quarter, each title a link to its page. Inline
+   rather than a jump into the library, because the library has no year filter
+   and a year is a question he asks about his history, not a way to browse. */
+function beatenByYear() {
   const byYear = new Map();
   GAMES.forEach(g => {
-    if (!g.status || g.status === 'Unplayed' || !g.completed) return;
+    if (g.status !== 'Beaten' || !g.completed) return;
     const m = /(\d{4})/.exec(g.completed);
     if (!m) return;
-    byYear.set(m[1], (byYear.get(m[1]) || 0) + 1);
+    if (!byYear.has(m[1])) byYear.set(m[1], []);
+    byYear.get(m[1]).push(g);
   });
   if (!byYear.size) return null;
   const years = [...byYear.keys()].sort();
   const from = +years[0], to = +years[years.length - 1];
-  const max = Math.max(...byYear.values());
+  const max = Math.max(...[...byYear.values()].map(a => a.length));
+  const box = el('div');
   const wrap = el('div', 'cols');
+  const detail = el('div', 'ydetail');
+  detail.hidden = true;
+  let open = null;
+
+  const show = (y, btn) => {
+    wrap.querySelectorAll('.col.on').forEach(x => x.classList.remove('on'));
+    if (open === y) { open = null; detail.hidden = true; detail.replaceChildren(); return; }
+    open = y;
+    btn.classList.add('on');
+    const games = byYear.get(y).slice().sort((a, b) =>
+      quarterKey(a.completed) - quarterKey(b.completed) || a.title.localeCompare(b.title));
+    detail.replaceChildren();
+    const head = el('p', 'yhead');
+    head.appendChild(el('b', null, `Beaten in ${y}`));
+    head.append(` · ${games.length} ${games.length === 1 ? 'game' : 'games'}`);
+    detail.appendChild(head);
+    const byQ = new Map();
+    games.forEach(g => {
+      const q = (/Q[1-4]/.exec(g.completed) || ['Undated'])[0];
+      if (!byQ.has(q)) byQ.set(q, []);
+      byQ.get(q).push(g);
+    });
+    byQ.forEach((list, q) => {
+      const row = el('div', 'yq');
+      row.appendChild(el('span', 'yql', q));
+      const ul = el('ul');
+      list.forEach(g => {
+        const li = el('li'); const a = el('a', null, g.title);
+        a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li);
+      });
+      row.appendChild(ul);
+      detail.appendChild(row);
+    });
+    detail.hidden = false;
+  };
+
   for (let y = from; y <= to; y++) {
-    const n = byYear.get(String(y)) || 0;
-    const c = el('div', 'col');
+    const games = byYear.get(String(y)) || [];
+    const n = games.length;
+    const c = el(n ? 'button' : 'div', 'col');
     c.title = `${y} — ${n} ${n === 1 ? 'game' : 'games'}`;
+    if (n) {
+      c.type = 'button';
+      c.setAttribute('aria-label', `${y}: ${n} ${n === 1 ? 'game' : 'games'} beaten`);
+      c.onclick = () => show(String(y), c);
+    }
     const barwrap = el('div', 'colbar');
     const f = el('div', 'colf');
     f.style.height = n ? Math.max(3, (n / max) * 100) + '%' : '0';
@@ -1753,12 +1789,20 @@ function completionsByYear() {
     barwrap.appendChild(f);
     c.appendChild(barwrap);
     /* Every fifth year and the endpoints, so the axis never collides with
-       itself on a narrow screen. */
-    c.appendChild(el('span', 'coly', (y % 5 === 0 || y === from || y === to) ? String(y) : ''));
+       itself on a narrow screen - and a fifth year within two of an endpoint
+       is dropped, because 2025 beside 2026 overprinted on a phone. */
+    const lab = y === from || y === to || (y % 5 === 0 && y - from > 2 && to - y > 2);
+    c.appendChild(el('span', 'coly', lab ? String(y) : ''));
     wrap.appendChild(c);
   }
-  return wrap;
+  box.appendChild(wrap);
+  box.appendChild(detail);
+  return box;
 }
+
+/* Status -> bar colour, the same tokens as the list rail and the pills, so a
+   status looks like itself everywhere. Unknown statuses get the default blue. */
+const STATUS_BAR = { 'Beaten': 'st-b', 'Abandoned': 'st-a', 'In Progress': 'st-p', 'Sampled': 'st-s', 'Retired': 'st-r' };
 
 function renderStats() {
   const h = $('#stats');
@@ -1770,7 +1814,8 @@ function renderStats() {
     'Every number here is counted from the library itself. Most of them are filters — click one to drop into the library with it applied.'));
 
   /* ---- headline tiles. A hero number is not a chart; four of them are not a
-     chart either. Bar charts start below. ---- */
+     chart either. Bar charts start below. `Tagged` was retired 2026-09-29 -
+     every row is tagged, so it only ever read 100%. ---- */
   const tiles = el('div', 'stiles');
   const tile = (n, label, sub, href) => {
     if (n == null) return;
@@ -1786,15 +1831,24 @@ function renderStats() {
   tile(c.owned, 'Owned', pct(c.owned) + ' of the library', '#/');
   tile(c.played, 'Played', pct(c.played) + ' of the library', '#/played');
   tile(c.beaten, 'Beaten', c.beatenNeverOwned + ' never owned', '#/?status=Beaten');
-  tile(c.logged - c.untagged - c.unverified, 'Tagged',
-       pct(c.logged - c.untagged - c.unverified) + ' have a genre');
   sheet.appendChild(tiles);
 
-  sheet.appendChild(playedFacts());
+  /* ---- what "played" is made of. Every status the workbook carries except
+     Unplayed, off META.statuses, biggest first - no hand-written list. ---- */
+  const played = (META.statuses || [])
+    .filter(d => d.value !== 'Unplayed' && d.count)
+    .sort((a, b) => b.count - a.count)
+    .map(d => ({ label: d.value, n: d.count, cls: STATUS_BAR[d.value],
+                 href: '#/played?status=' + encodeURIComponent(d.value) }));
+  if (played.length) {
+    sheet.appendChild(statPanel("What I've played",
+      `${c.played.toLocaleString()} games with some play history. What each one means is at the bottom of the page.`,
+      barList(played)));
+  }
 
-  const yr = completionsByYear();
-  if (yr) sheet.appendChild(statPanel('Games finished each year',
-    'Counted off the quarter recorded against every played game. Hover a column for its year.', yr));
+  const yr = beatenByYear();
+  if (yr) sheet.appendChild(statPanel('Games beaten each year',
+    'Counted off the quarter recorded against every beaten game. Click a year to see them.', yr));
 
   /* ---- the ranked lists, scoped by a tab ------------------------------
 
@@ -1827,6 +1881,34 @@ function renderStats() {
       tabs.appendChild(b);
     });
     scopeWrap.appendChild(tabs);
+
+    /* What used to be the "Library health" section, 2026-09-29. Justin: not
+       worth its own callout. It is a quiet line on the Logged tab now, because
+       not-owned and resubscribe are facts about the library, not about play.
+       The data-gap flags (untagged, unverified, ownership contradictions,
+       Switch games with no shelf) are all zero today and simply don't render -
+       but they stay wired, so a gap that reopens still surfaces here. */
+    if (statsScope === 'logged') {
+      const bits = [
+        [c.ownershipConflict, 'ownership contradictions', 'ownership-conflict'],
+        [c.untagged, 'untagged', 'untagged'],
+        [c.unverified, 'marked unverified', 'unverified'],
+        [c.notOwned, 'not owned', 'not-owned'],
+        [c.needsResub, 'need a resubscribe', 'needs-resub'],
+        [c.noShelf, 'Switch games with no shelf', 'no-shelf']
+      ].filter(([n]) => n);
+      if (bits.length) {
+        const p = el('p', 'sflags');
+        p.append('Also in the library: ');
+        bits.forEach(([n, label, flag], i) => {
+          if (i) p.append(' · ');
+          const a = el('a', null, `${n.toLocaleString()} ${label}`);
+          a.href = '#/?flag=' + flag;
+          p.appendChild(a);
+        });
+        scopeWrap.appendChild(p);
+      }
+    }
 
     const [, , getSet, hrefBase] = SCOPES.find(sc => sc[0] === statsScope) || SCOPES[0];
     const set = getSet();
@@ -1920,64 +2002,23 @@ function renderStats() {
   }
   drawScope();
 
-  /* ---- library health, unchanged in substance ---- */
-  const hsec = el('div', 'spanel');
-  hsec.appendChild(el('h3', null, 'Library health'));
-  hsec.appendChild(el('p', 'pnote', 'Open data gaps. Every one is a filter.'));
-  const grid = el('div', 'hgrid');
-  /* A gap that no longer exists is not worth a card. Both ownership
-     contradictions and all six missing Switch folders were fixed in the chat at
-     v65-v67, so those cards now vanish rather than reading "0". */
-  const card = (n, label, flag, alert) => {
-    if (!n) return;
-    const b = el('button', 'hcard' + (alert ? ' alert' : ''));
-    b.appendChild(el('b', null, n.toLocaleString()));
-    b.appendChild(el('span', null, label));
-    b.onclick = () => { state.flag = flag; state.view = 'library'; closeStats(); sync(); };
-    grid.appendChild(b);
-  };
-  card(c.ownershipConflict, 'Ownership contradictions', 'ownership-conflict', true);
-  card(c.untagged, 'Untagged', 'untagged');
-  card(c.unverified, 'Marked Unverified', 'unverified');
-  /* Labelled "Played, never owned" until 2026-09-05, and that was wrong: the
-     `not-owned` flag is every row without an owning token - 96 of them - and
-     only 57 have been played (all Beaten). The other 39 are never-owned and
-     never-played, mostly subscription titles. The interesting figure, 57, is on
-     the Beaten tile above where it is actually true. */
-  card(c.notOwned, 'Not owned', 'not-owned');
-  card(c.needsResub, 'Need a resubscribe', 'needs-resub');
-  card(c.noShelf, 'Switch games with no shelf', 'no-shelf');
-  hsec.appendChild(grid);
-  if (!grid.childNodes.length) {
-    hsec.appendChild(el('p', 'pnote', 'No open data gaps. Every flag this panel tracks is currently clear.'));
-  }
+  sheet.appendChild(statusNotes());
 
-  const conflicts = GAMES.filter(g => (g.flags || []).includes('ownership-conflict'));
-  if (conflicts.length) {
-    const n = el('div', 'hnames'); n.style.borderColor = 'var(--coral-line)';
-    const t = el('p', 't');
-    t.appendChild(el('b', null, 'These two contradict themselves'));
-    t.append(' — and they cancel out, which is why the totals still balance. Corrected at the source, not on the site.');
-    n.appendChild(t);
-    const ul = el('ul');
-    conflicts.forEach(g => { const li = el('li'); const a = el('a', null, g.title); a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li); });
-    n.appendChild(ul);
-    hsec.appendChild(n);
-  }
-
-  const noShelf = GAMES.filter(g => (g.flags || []).includes('no-shelf'));
-  if (noShelf.length) {
-    const n = el('div', 'hnames');
-    const t = el('p', 't');
-    t.appendChild(el('b', null, noShelf.length + ' Switch games have no shelf folder'));
-    t.append(' — these lost it in a merge rather than never having one.');
-    n.appendChild(t);
-    const ul = el('ul');
-    noShelf.forEach(g => { const li = el('li'); const a = el('a', null, g.title); a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li); });
-    n.appendChild(ul);
-    hsec.appendChild(n);
-  }
-  sheet.appendChild(hsec);
+  /* Every count on this page is over the WHOLE library, but the library hides
+     shovelware by default - so "85 not owned" used to land on 58 games, "27
+     need a resubscribe" on 0, and 11 Retired on 10. Every link out of here
+     turns the hide switch off (visibly: the pill reads "Hidden (0)"), so the
+     number he clicked is the number he lands on. Done once, here, over the
+     finished page, so no link can be built without it. Game pages are exempt;
+     they are not filtered lists. The scope tabs rebuild their links, so they
+     get the same pass on every redraw. */
+  const unhide = root => root.querySelectorAll('a[href^="#/"]').forEach(a => {
+    const href = a.getAttribute('href');
+    if (href.startsWith('#/game/') || /[?&]hideoff=/.test(href)) return;
+    a.setAttribute('href', href + (href.includes('?') ? '&' : '?') + 'hideoff=1');
+  });
+  unhide(sheet);
+  new MutationObserver(() => unhide(scopeWrap)).observe(scopeWrap, { childList: true });
 
   sheet.appendChild(el('p', 'foot-note',
     `${META.source} · ${META.version} · generated ${META.generated} · ` +

@@ -361,12 +361,6 @@ a{color:var(--blue)}
   .card-chip{font-size:8px; padding:2px 6px}
 }
 
-/* ---------- completion view banner ---------- */
-.cbanner{margin:18px 0 4px; padding:15px 18px; border-radius:var(--r); background:var(--mint-soft); border:1px solid var(--mint-line)}
-.cbanner p{margin:0; font-size:14px; color:var(--ink-2); line-height:1.6}
-.cbanner p b{color:var(--mint); font-weight:700}
-.cbanner p.sub{margin-top:8px; font-size:12.5px; color:var(--ink-3); border-top:1px solid var(--mint-line); padding-top:8px}
-
 .empty{padding:60px 20px; text-align:center; color:var(--ink-3)}
 .empty b{display:block; font-family:var(--display); font-size:19px; color:var(--ink); margin-bottom:6px}
 .sentinel{height:1px}
@@ -455,23 +449,10 @@ a{color:var(--blue)}
 .notes.p p{background:var(--blue-soft)}
 .notes.x p{background:var(--panel-3)}
 
-/* ---------- health panel ---------- */
+/* ---------- stats page ---------- */
 .sheet{border:1px solid var(--line-2); background:var(--panel-2); padding:22px; border-radius:var(--r); margin-top:20px; box-shadow:var(--sh)}
 .sheet h2{font-family:var(--display); margin:0 0 3px; font-size:19px; font-weight:600}
 .sheet .sub{font-size:12.5px; color:var(--ink-3); margin:0 0 17px}
-.hgrid{display:grid; grid-template-columns:repeat(auto-fit,minmax(172px,1fr)); gap:10px}
-.hcard{border:1px solid var(--line); background:var(--panel); border-radius:var(--r); padding:12px 14px; box-shadow:var(--sh); text-align:left; cursor:pointer; font-family:var(--ui)}
-.hcard:hover{border-color:var(--blue-mid)}
-.hcard b{display:block; font-family:var(--mono); font-size:20px; font-variant-numeric:tabular-nums; line-height:1.2; color:var(--ink)}
-.hcard span{font-size:12px; color:var(--ink-3)}
-.hcard.alert{border-color:var(--coral-line); background:var(--coral-soft)}
-.hcard.alert b, .hcard.alert span{color:var(--coral)}
-.hnames{margin-top:15px; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); padding:13px 15px}
-.hnames .t{font-size:13px; color:var(--ink-2); margin:0 0 9px}
-.hnames .t b{color:var(--ink); font-weight:700}
-.hnames ul{margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px}
-.hnames li a{font-size:12px; color:var(--ink-2); background:var(--panel-2); border:1px solid var(--line-2); border-radius:20px; padding:3px 11px; text-decoration:none; display:inline-block}
-.hnames li a:hover{color:var(--blue); border-color:var(--blue-mid)}
 .settings{margin-top:15px; display:flex; flex-wrap:wrap; gap:9px}
 .setrow{display:flex; align-items:center; gap:10px; font-size:12.5px; color:var(--ink-2); border:1px solid var(--line); background:var(--panel); border-radius:var(--r); padding:9px 13px; cursor:pointer; font-family:var(--ui)}
 /* `display:inline-block` is load-bearing: `.tgl` is a bare `<span>`, and
@@ -574,6 +555,36 @@ a.bar:hover .bf{background:var(--blue)}
 .colf.peak{background:var(--blue)}
 .colv{position:absolute; top:-15px; left:0; right:0; text-align:center; font-family:var(--mono); font-size:10px; color:var(--ink-3)}
 .coly{font-family:var(--mono); font-size:9.5px; color:var(--ink-4); height:12px}
+/* A year with games is a button. Reset the button chrome so it lays out
+   exactly like the empty-year divs beside it. */
+button.col{border:0; background:none; padding:0; font:inherit; cursor:pointer}
+button.col:hover .coly, .col.on .coly{color:var(--blue)}
+.col.on .colf{background:var(--blue)}
+/* The year opened from the chart: quarter label on the left, titles as pills. */
+.ydetail{margin-top:14px; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); padding:13px 15px}
+.yhead{margin:0 0 10px; font-size:13px; color:var(--ink-3)}
+.yhead b{color:var(--ink); font-weight:700}
+.yq{display:grid; grid-template-columns:2.6em 1fr; gap:10px; align-items:start; padding:6px 0; border-top:1px solid var(--line)}
+.yql{font-family:var(--mono); font-size:11px; color:var(--ink-4); padding-top:4px}
+.yq ul{margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px}
+.yq li a{font-size:12px; color:var(--ink-2); background:var(--panel-2); border:1px solid var(--line-2); border-radius:20px; padding:3px 11px; text-decoration:none; display:inline-block}
+.yq li a:hover{color:var(--blue); border-color:var(--blue-mid)}
+
+/* Status bars wear the same colours as the list rail and the pills. */
+.bar .bf.st-b{background:var(--mint-line)}   a.bar:hover .bf.st-b{background:var(--mint)}
+.bar .bf.st-a{background:var(--coral-line)}  a.bar:hover .bf.st-a{background:var(--coral)}
+.bar .bf.st-s{background:var(--gold-line)}   a.bar:hover .bf.st-s{background:var(--gold)}
+.bar .bf.st-r{background:var(--slate-line)}  a.bar:hover .bf.st-r{background:var(--slate)}
+
+/* Not-owned / resubscribe, quiet, under the Logged tab. */
+.sflags{margin:10px 0 0; font-size:12.5px; color:var(--ink-3)}
+.sflags a{color:var(--ink-2); text-decoration:underline; text-decoration-color:var(--line-2); text-underline-offset:2px}
+.sflags a:hover{color:var(--blue); text-decoration-color:currentColor}
+
+/* Status definitions, small print at the foot of the page. */
+.snotes{margin-top:28px; padding-top:12px; border-top:1px solid var(--line)}
+.snotes p{margin:0 0 4px; font-size:11.5px; color:var(--ink-4); line-height:1.55}
+.snotes b{color:var(--ink-3); font-weight:700}
 
 @media (max-width:560px){
   .bar{grid-template-columns:minmax(0,8em) 1fr auto; gap:8px}
