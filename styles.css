@@ -655,3 +655,8 @@ button.col:hover .coly, .col.on .coly{color:var(--blue)}
 @media(max-width:620px){
   .totop{right:14px; bottom:14px; width:42px; height:42px}
 }
+/* Status tag on a non-Beaten title in the year list: its date is not a finish. */
+.ytag{margin-left:6px; font-size:10px; font-weight:700; padding:0 6px; border-radius:10px; background:var(--blue-soft); color:var(--blue)}
+.ytag.st-a{background:var(--coral-soft); color:var(--coral)}
+.ytag.st-s{background:var(--gold-soft); color:var(--gold)}
+.ytag.st-r{background:var(--slate-soft); color:var(--slate)}

@@ -1705,13 +1705,14 @@ function statPanel(title, note, body) {
   return d;
 }
 
-/* Games beaten per year, off the `Completed` quarter on every Beaten row.
+/* Games played per year, off the `Completed` quarter on every played row.
 
-   Beaten ONLY, as of 2026-09-29. It used to count every played row with a
-   date, which quietly put the 11 Abandoned rows in "games finished" - and on an
-   Abandoned row `Completed` is when he STOPPED. Retired and Sampled dates are
-   not finishes either. They all still have their own bars in "What I've
-   played", and their own dates on their game pages.
+   Every status with a date counts (Justin, 2026-09-29: "games played by
+   year"). That is the chart's question, so an Abandoned or Retired row belongs
+   in it - but `Completed` carries four meanings (finished, stopped, played,
+   put down), so in the year's list every non-Beaten title wears its status and
+   is never presented as a finish. In Progress rows carry no date, so they
+   cannot appear here; they have their own bar in "What I've played".
 
    Change-over-time, so it is columns rather than a ranked list. One series, so
    no legend. Only the peak is direct-labelled - a number over every column is
@@ -1721,10 +1722,10 @@ function statPanel(title, note, body) {
    under the chart, grouped by quarter, each title a link to its page. Inline
    rather than a jump into the library, because the library has no year filter
    and a year is a question he asks about his history, not a way to browse. */
-function beatenByYear() {
+function playedByYear() {
   const byYear = new Map();
   GAMES.forEach(g => {
-    if (g.status !== 'Beaten' || !g.completed) return;
+    if (!g.status || g.status === 'Unplayed' || !g.completed) return;
     const m = /(\d{4})/.exec(g.completed);
     if (!m) return;
     if (!byYear.has(m[1])) byYear.set(m[1], []);
@@ -1749,8 +1750,10 @@ function beatenByYear() {
       quarterKey(a.completed) - quarterKey(b.completed) || a.title.localeCompare(b.title));
     detail.replaceChildren();
     const head = el('p', 'yhead');
-    head.appendChild(el('b', null, `Beaten in ${y}`));
+    head.appendChild(el('b', null, `Played in ${y}`));
     head.append(` · ${games.length} ${games.length === 1 ? 'game' : 'games'}`);
+    const beaten = games.filter(g => g.status === 'Beaten').length;
+    if (beaten !== games.length) head.append(`, ${beaten} beaten`);
     detail.appendChild(head);
     const byQ = new Map();
     games.forEach(g => {
@@ -1764,6 +1767,9 @@ function beatenByYear() {
       const ul = el('ul');
       list.forEach(g => {
         const li = el('li'); const a = el('a', null, g.title);
+        if (g.status !== 'Beaten') {
+          a.appendChild(el('span', 'ytag ' + (STATUS_BAR[g.status] || ''), g.status));
+        }
         a.href = '#/game/' + g.id; li.appendChild(a); ul.appendChild(li);
       });
       row.appendChild(ul);
@@ -1779,7 +1785,7 @@ function beatenByYear() {
     c.title = `${y} — ${n} ${n === 1 ? 'game' : 'games'}`;
     if (n) {
       c.type = 'button';
-      c.setAttribute('aria-label', `${y}: ${n} ${n === 1 ? 'game' : 'games'} beaten`);
+      c.setAttribute('aria-label', `${y}: ${n} ${n === 1 ? 'game' : 'games'} played`);
       c.onclick = () => show(String(y), c);
     }
     const barwrap = el('div', 'colbar');
@@ -1846,9 +1852,9 @@ function renderStats() {
       barList(played)));
   }
 
-  const yr = beatenByYear();
-  if (yr) sheet.appendChild(statPanel('Games beaten each year',
-    'Counted off the quarter recorded against every beaten game. Click a year to see them.', yr));
+  const yr = playedByYear();
+  if (yr) sheet.appendChild(statPanel('Games played by year',
+    'Counted off the quarter recorded against every played game. Click a year to see them.', yr));
 
   /* ---- the ranked lists, scoped by a tab ------------------------------
 
