@@ -1254,13 +1254,13 @@ function renderDetail(id) {
       b.appendChild(rh);
       const ul = el('ul');
       g[key].forEach(entry => {
-        /* `contains` and `otherVersions` entries are objects; every other
+        /* `contains`, `otherVersions` and `dlc` entries are objects; every other
            relationship column is still a plain string. `partsCompleted`
            itself is "Name - Platform (Date)" and only reaches this render at
            all when neither box above already showed it - same platform
            simplification as doneMap, so it never shows the raw "PC
            (Windows)" spelling either. */
-        const isObj = key === 'contains' || key === 'otherVersions';
+        const isObj = key === 'contains' || key === 'otherVersions' || key === 'dlc';
         let v = isObj ? entry.name : entry;
         if (key === 'partsCompleted') {
           const i = v.lastIndexOf(' - ');
@@ -1294,7 +1294,7 @@ function renderDetail(id) {
            list just the store(s), not the platform - "it will look cleaner."
            A suffix that was platform-only leaves `stores` empty, same
            blank-means-nothing-to-say rule as Contains above. */
-        if (key === 'otherVersions' && entry.stores && entry.stores.length) {
+        if ((key === 'otherVersions' || key === 'dlc') && entry.stores && entry.stores.length) {
           const own = el('span', 'own-sep');
           own.append(' on ');
           entry.stores.forEach((t, i) => {
