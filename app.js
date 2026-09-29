@@ -306,6 +306,15 @@ let statsYear = '';
    used to open over the library without touching the hash, so there was no
    history entry for Back to land on. */
 let lastStatsUrl = '#/stats';
+const YEAR_LAYOUT_KEY = 'gl.yearLayout';
+function yearLayoutPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(YEAR_LAYOUT_KEY) === 'grid' ? 'grid' : 'list';
+    localStorage.setItem(YEAR_LAYOUT_KEY, v);
+  } catch (e) { /* no storage: resets to List each visit */ }
+  return v;
+}
+let yearLayout = yearLayoutPref();
 let statsScroll = null;
 let statsFresh = false;
 
@@ -1775,11 +1784,29 @@ function playedByYear() {
       quarterKey(a.completed) - quarterKey(b.completed) || a.title.localeCompare(b.title));
     detail.replaceChildren();
     const head = el('p', 'yhead');
+    /* List / Grid, Justin's ask 2026-09-29: the list stays compact with no
+       art; the grid shows covers, using the library's own card. Its own
+       browser preference, separate from the library's, so choosing pictures
+       here does not change how the library looks. */
+    const tog = el('span', 'viewtoggle');
+    [['list', 'List'], ['grid', 'Grid']].forEach(([v, label]) => {
+      const b = el('button', yearLayout === v ? 'on' : '', label);
+      b.type = 'button';
+      b.onclick = () => {
+        if (yearLayout === v) return;
+        yearLayout = yearLayoutPref(v);
+        open = null; show(y, btn);
+      };
+      tog.appendChild(b);
+    });
+    const top = el('div', 'ytop');
+    top.appendChild(head);
+    top.appendChild(tog);
     head.appendChild(el('b', null, `Played in ${y}`));
     head.append(` · ${games.length} ${games.length === 1 ? 'game' : 'games'}`);
     const beaten = games.filter(g => g.status === 'Beaten').length;
     if (beaten !== games.length) head.append(`, ${beaten} beaten`);
-    detail.appendChild(head);
+    detail.appendChild(top);
     const byQ = new Map();
     games.forEach(g => {
       const q = (/Q[1-4]/.exec(g.completed) || ['Undated'])[0];
@@ -1789,6 +1816,15 @@ function playedByYear() {
     byQ.forEach((list, q) => {
       const row = el('div', 'yq');
       row.appendChild(el('span', 'yql', q));
+      if (yearLayout === 'grid') {
+        /* The card's own status chip already says Beaten / Abandoned / etc,
+           so no extra tag is needed here. */
+        const grid = el('div', 'cardgrid');
+        list.forEach(g => grid.appendChild(cardNode({ g })));
+        row.appendChild(grid);
+        detail.appendChild(row);
+        return;
+      }
       const ul = el('ul');
       list.forEach(g => {
         const li = el('li'); const a = el('a', null, g.title);

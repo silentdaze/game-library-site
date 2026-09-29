@@ -559,13 +559,18 @@ a.bar:hover .bf{background:var(--blue)}
    exactly like the empty-year divs beside it. */
 button.col{border:0; background:none; padding:0; font:inherit; cursor:pointer}
 button.col:hover .coly, .col.on .coly{color:var(--blue)}
-.col.on .colf{background:var(--blue)}
+/* The OPEN year is ink, not blue: blue already marks the busiest year, and
+   the two used to be indistinguishable when any other year was open. */
+.col.on .colf{background:var(--ink)}
+.col.on .coly{color:var(--ink); font-weight:700}
 /* The year opened from the chart: quarter label on the left, titles as pills. */
 .ydetail{margin-top:14px; border:1px solid var(--line); border-radius:var(--r); background:var(--panel); padding:13px 15px}
-.yhead{margin:0 0 10px; font-size:13px; color:var(--ink-3)}
+.ytop{display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin:0 0 10px}
+.yhead{margin:0; font-size:13px; color:var(--ink-3)}
 .yhead b{color:var(--ink); font-weight:700}
 .yq{display:grid; grid-template-columns:2.6em 1fr; gap:10px; align-items:start; padding:6px 0; border-top:1px solid var(--line)}
 .yql{font-family:var(--mono); font-size:11px; color:var(--ink-4); padding-top:4px}
+.yq .cardgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:12px; padding:2px 0 6px}
 .yq ul{margin:0; padding:0; list-style:none; display:flex; flex-wrap:wrap; gap:6px}
 .yq li a{font-size:12px; color:var(--ink-2); background:var(--panel-2); border:1px solid var(--line-2); border-radius:20px; padding:3px 11px; text-decoration:none; display:inline-block}
 .yq li a:hover{color:var(--blue); border-color:var(--blue-mid)}
@@ -660,3 +665,10 @@ button.col:hover .coly, .col.on .coly{color:var(--blue)}
 .ytag.st-a{background:var(--coral-soft); color:var(--coral)}
 .ytag.st-s{background:var(--gold-soft); color:var(--gold)}
 .ytag.st-r{background:var(--slate-soft); color:var(--slate)}
+/* On a phone the quarter label sits above its games instead of beside them,
+   so the year's grid gets the full width - two covers a row, as in the library. */
+@media (max-width:560px){
+  .yq{grid-template-columns:1fr; gap:4px}
+  .yql{padding-top:0}
+  .yq .cardgrid{grid-template-columns:repeat(2,1fr); gap:10px}
+}
