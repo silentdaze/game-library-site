@@ -1,9 +1,21 @@
-/* Game Library - one committed light theme. Soft whites, cool greys, pastel blue.
-   Deliberately does not follow the system light/dark setting. */
+/* Game Library - two themes from one set of tokens. Light is the original:
+   soft whites, cool greys, pastel blue. Dark was added 2026-11-09.
+
+   The theme is chosen by `data-theme` on <html>, which a tiny inline script in
+   index.html sets BEFORE first paint (the visitor's saved choice, else the
+   device setting). That is why the dark palette is written once, under
+   `:root[data-theme="dark"]`, instead of twice under a media query as well.
+   With scripts off the attribute is never set and the page is simply light.
+
+   Every colour a component uses must come from a token, or it will be wrong in
+   one of the two themes. The exceptions are deliberate and are all "white text
+   on something dark in BOTH themes": the --fill-* tokens, cover-art scrims and
+   the game page's hero. */
 
 :root{
   --ground:#eef4fb; --panel:#fff; --panel-2:#f7fafd; --panel-3:#eaf1f8;
-  --ink:#1d2a3a; --ink-2:#4d6076; --ink-3:#5f7387; --ink-4:#64778b;
+  color-scheme:light;
+  --ink:#1d2a3a; --ink-1:#1d2a3a; --ink-2:#4d6076; --ink-3:#5f7387; --ink-4:#64778b;
   --line:#e3ecf5; --line-2:#cfdeed;
 
   --blue:#2d76c4; --blue-mid:#93c5f0; --blue-soft:#e3effb; --blue-line:#bcdcf7;
@@ -19,12 +31,50 @@
      Distinct from the lilac used for "not owned" so the two never read alike. */
   --slate:#4a6076; --slate-soft:#eaeff4; --slate-line:#c4d2de;
 
+  /* Solid fills that carry WHITE text - status chips, the hero's status pill,
+     the small "on" switches. They are the same in both themes on purpose: the
+     accent tokens above get much lighter in dark mode so they read as text on
+     a dark panel, and white text on those would wash out. */
+  --fill-blue:#2d76c4; --fill-mint:#1f8467; --fill-coral:#b84f33;
+  --fill-gold:#8a6413; --fill-slate:#4a6076; --fill-lilac:#6455bd;
+
+  /* The two soft glows behind the page, and the loading shimmer on covers. */
+  --glow-a:rgba(147,197,240,.28); --glow-b:rgba(205,197,240,.24);
+  --shimmer-a:#e3ecf5; --shimmer-b:#f4f8fc;
+
   --r:12px; --r-sm:8px;
   --sh:0 1px 2px rgba(29,42,58,.05), 0 10px 24px -14px rgba(29,42,58,.22);
   --sh-lg:0 1px 3px rgba(29,42,58,.06), 0 22px 44px -24px rgba(29,42,58,.34);
+  --sh-lift:0 2px 4px rgba(29,42,58,.08), 0 22px 36px -16px rgba(29,42,58,.45);
   --ui:"Nunito Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
   --display:Outfit,system-ui,sans-serif;
   --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+
+/* Dark. Same token names, so no component below needs to know which theme it
+   is in. The status colours keep their meanings: mint beaten, coral abandoned,
+   gold sampled, slate retired, lilac not-owned. `-soft` is a tinted panel,
+   `-line` a rail or bar fill, and the bare name is text on either. */
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0d131e; --panel:#161e2c; --panel-2:#1a2434; --panel-3:#212d40;
+  --ink:#e9eff7; --ink-1:#e9eff7; --ink-2:#bac6d6; --ink-3:#93a2b6; --ink-4:#8292a8;
+  --line:#222e41; --line-2:#314058;
+
+  --blue:#74b8f5; --blue-mid:#3d7ab8; --blue-soft:#162c45; --blue-line:#27496d;
+  --mint:#56d3a9; --mint-soft:#11332a; --mint-line:#1f6a55;
+  --coral:#f2906f; --coral-soft:#3a1d15; --coral-line:#7a3a28;
+  --lilac:#ab9df2; --lilac-soft:#231f42; --lilac-line:#453c80;
+  --gold:#e2bb62; --gold-soft:#33290f; --gold-line:#6e5620;
+  --slate:#a3b3c5; --slate-soft:#1e2835; --slate-line:#465a70;
+
+  --fill-slate:#50667c;
+  --glow-a:rgba(60,120,200,.16); --glow-b:rgba(120,100,220,.11);
+  --shimmer-a:#1a2434; --shimmer-b:#26344a;
+
+  --sh:0 1px 2px rgba(0,0,0,.4), 0 10px 24px -14px rgba(0,0,0,.7);
+  --sh-lg:0 1px 3px rgba(0,0,0,.45), 0 22px 44px -22px rgba(0,0,0,.85);
+  --sh-lift:0 2px 6px rgba(0,0,0,.5), 0 24px 40px -14px rgba(0,0,0,.85);
 }
 
 *{box-sizing:border-box}
@@ -37,8 +87,8 @@ body{
 body::before{
   content:""; position:fixed; inset:0; pointer-events:none; z-index:0;
   background:
-    radial-gradient(900px 460px at 8% -8%, rgba(147,197,240,.28), transparent 62%),
-    radial-gradient(760px 420px at 96% 2%, rgba(205,197,240,.24), transparent 64%);
+    radial-gradient(900px 460px at 8% -8%, var(--glow-a), transparent 62%),
+    radial-gradient(760px 420px at 96% 2%, var(--glow-b), transparent 64%);
 }
 .wrap{max-width:1120px; margin:0 auto; padding:0 22px 90px; position:relative; z-index:1}
 a{color:var(--blue)}
@@ -161,7 +211,7 @@ a{color:var(--blue)}
   font-family:var(--mono); font-size:10px; font-weight:500; color:var(--ink-3);
   border:0; background:transparent; padding:4px 8px; cursor:pointer; line-height:1.4;
 }
-.ordertoggle button.on{background:var(--blue); color:#fff}
+.ordertoggle button.on{background:var(--fill-blue); color:#fff}
 .ordertoggle button:not(.on):hover{color:var(--ink)}
 .doptions{max-height:300px; overflow-y:auto; padding:12px}
 /* Status only - see the comment on `doptions-short` in app.js. Nine rows at
@@ -210,7 +260,7 @@ a{color:var(--blue)}
    can never be a silent reason the list is short. */
 .morebtn .cnt{
   font-family:var(--mono); font-size:10px; font-weight:500; line-height:1;
-  background:var(--blue); color:#fff; border-radius:999px; padding:3px 6px;
+  background:var(--fill-blue); color:#fff; border-radius:999px; padding:3px 6px;
   font-variant-numeric:tabular-nums;
 }
 .morepanel{
@@ -316,9 +366,25 @@ a{color:var(--blue)}
   overflow:hidden; text-decoration:none; color:inherit;
   background:linear-gradient(160deg,var(--panel-3),var(--blue-soft));
   border:1px solid var(--line-2); box-shadow:var(--sh);
-  transition:transform .12s ease, box-shadow .12s ease;
+  transition:transform .18s ease, box-shadow .18s ease;
 }
-.card:hover{transform:translateY(-3px); box-shadow:var(--sh-lg); border-color:var(--blue-mid)}
+/* The lift. `z-index` so a raised card's shadow falls over its neighbours
+   rather than under them. */
+.card:hover, .card:focus-visible{transform:translateY(-5px) scale(1.025); box-shadow:var(--sh-lift); border-color:var(--blue-mid); z-index:2}
+
+/* Cover art loading, list thumb and grid card alike. `.pending` is set by
+   coverFade() in app.js ONLY while an image is genuinely still on its way, and
+   removed on load or on error. An image the browser already holds never gets
+   the class at all - which matters, because every filter change rebuilds the
+   whole list, and fading four hundred already-loaded covers back in on each
+   keystroke would make the page flicker. */
+@keyframes shimmer{ from{background-position:120% 0} to{background-position:-130% 0} }
+.card.pending, .cov.pending{
+  background:linear-gradient(100deg,var(--shimmer-a) 30%,var(--shimmer-b) 50%,var(--shimmer-a) 70%) 0 0/250% 100%;
+  animation:shimmer 1.3s linear infinite;
+}
+.card-art img, .cov img{transition:opacity .4s ease}
+.pending img{opacity:0}
 .card-art{position:absolute; inset:0}
 /* Cropped to fill, unlike the detail hero and list thumb (fitShape()) -
    deliberate here, so a grid of hundreds of tiles reads as one consistent
@@ -329,9 +395,9 @@ a{color:var(--blue)}
   font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.04em;
   color:#fff; padding:3px 8px; border-radius:20px; box-shadow:0 1px 3px rgba(29,42,58,.35);
 }
-.card-chip.b{background:var(--mint)} .card-chip.a{background:var(--coral)}
-.card-chip.p{background:var(--blue)} .card-chip.s{background:var(--gold)}
-.card-chip.r{background:var(--slate)} .card-chip.x{background:var(--lilac)}
+.card-chip.b{background:var(--fill-mint)} .card-chip.a{background:var(--fill-coral)}
+.card-chip.p{background:var(--fill-blue)} .card-chip.s{background:var(--fill-gold)}
+.card-chip.r{background:var(--fill-slate)} .card-chip.x{background:var(--fill-lilac)}
 /* The scrim: built from --ink rather than plain black, so it reads as this
    site's own colour under any cover rather than a generic darken filter. */
 .card.has-cover .card-ov{
@@ -507,7 +573,7 @@ a{color:var(--blue)}
   flex:none; margin-top:2px; display:flex; align-items:center; justify-content:center;
   color:#fff; font-size:10px; line-height:1;
 }
-.box.on{background:var(--blue); border-color:var(--blue)}
+.box.on{background:var(--fill-blue); border-color:var(--fill-blue)}
 .sortcheck small{display:block; color:var(--ink-4); font-size:11px; line-height:1.35; margin-top:2px}
 
 
@@ -672,3 +738,127 @@ button.col:hover .coly, .col.on .coly{color:var(--blue)}
   .yql{padding-top:0}
   .yq .cardgrid{grid-template-columns:repeat(2,1fr); gap:10px}
 }
+
+/* ---------- header on a phone ---------- */
+/* The theme button made the header one box wider than a 375px screen holds.
+   Tighten the boxes there, and let the row wrap as a last resort on anything
+   narrower still, so it can never push the page sideways. */
+.head-right{flex-wrap:wrap; justify-content:flex-end}
+@media (max-width:440px){
+  .head-right{gap:8px}
+  .counts{gap:6px}
+  .cpill{padding:7px 9px}
+  .statsbtn{padding:0 12px}
+}
+
+/* ---------- game page: hero ---------- */
+/* Added 2026-11-09. The band behind the top of a game page is the game's own
+   cover, enlarged and blurred until only its colours are left, then darkened
+   and faded into the page. `.herobg` lives outside `.wrap` (see index.html) so
+   it can run the full width of the window and sit BEHIND the masthead; app.js
+   sets its height to wherever the title block ends.
+
+   Everything drawn over it is white in BOTH themes, because the band is dark
+   in both. `body.has-hero` is what restyles the masthead while it is showing.
+   With no cover the band keeps its plain dark gradient - never the page
+   background, or the white text would vanish in the light theme. */
+.herobg{
+  position:absolute; top:0; left:0; right:0; height:560px; overflow:hidden;
+  z-index:0; pointer-events:none;
+  background:linear-gradient(135deg,#1a2a44,#0b1019 70%);
+}
+.herobg[hidden]{display:none}
+.herobg-img{
+  position:absolute; inset:-60px; background-size:cover; background-position:center 30%;
+  filter:blur(42px) saturate(1.35); transform:scale(1.15);
+  opacity:0; transition:opacity .6s ease;
+}
+.herobg-img.on{opacity:1}
+.herobg::after{
+  content:""; position:absolute; inset:0;
+  background:linear-gradient(to bottom, rgba(9,13,21,.52), rgba(9,13,21,.62) calc(100% - 170px), var(--ground) 100%);
+}
+/* The band fades to the flat page colour, so the page's corner glows have to
+   be off while it shows - otherwise its bottom edge is a visible seam. */
+body.has-hero::before{display:none}
+body.has-hero .wordmark{color:#fff}
+body.has-hero .wordmark span{color:rgba(255,255,255,.72)}
+body.has-hero .cpill, body.has-hero .statsbtn{
+  background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.2); color:#fff;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+body.has-hero .cpill b{color:#fff}
+body.has-hero .cpill.m b{color:#8be8c6}
+body.has-hero .cpill span{color:rgba(255,255,255,.72)}
+body.has-hero .statsbtn:hover{background:rgba(255,255,255,.22); color:#fff}
+
+.crumb a{
+  display:inline-flex; align-items:center; color:#fff; font-size:13px;
+  background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.2);
+  border-radius:999px; padding:7px 15px;
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+.crumb a:hover{background:rgba(255,255,255,.22); text-decoration:none}
+
+.dhead{gap:30px; padding:24px 0 0; align-items:flex-end; flex-wrap:nowrap; color:#fff}
+/* With art, the slot stops being a fixed 140x200 box and takes the picture's
+   own shape - portrait, square or landscape - inside a size cap. Nothing is
+   cropped and nothing is letterboxed, so fitShape()'s `.wide` rule is
+   switched back off here. */
+.cover-slot.has-img{
+  width:auto; height:auto; padding:0; border:0; border-radius:14px; line-height:0;
+  background:rgba(255,255,255,.06);
+  box-shadow:0 2px 6px rgba(0,0,0,.4), 0 30px 60px -20px rgba(0,0,0,.8);
+}
+.cover-slot.has-img img, .cover-slot.has-img img.wide{
+  display:block; width:auto; height:auto; max-height:380px; max-width:min(300px,38vw);
+  padding:0; background:none; border-radius:0; object-fit:fill;
+}
+.cover-slot:not(.has-img){background:rgba(255,255,255,.08); border-color:rgba(255,255,255,.3); color:rgba(255,255,255,.75)}
+.dtitle{min-width:0; padding-bottom:4px}
+.dtitle h1{font-size:clamp(28px,4.4vw,44px); line-height:1.05; letter-spacing:-.03em; margin:0 0 8px; text-shadow:0 2px 18px rgba(0,0,0,.45)}
+.dsub{font-size:15px; color:rgba(255,255,255,.86); margin-bottom:0}
+.dsub a{color:#fff}
+.statusline{border-top:0; padding-top:0; margin-top:16px}
+.dhead .spill{
+  padding:5px 14px; font-size:12.5px; color:#fff;
+  background:rgba(255,255,255,.14); border-color:rgba(255,255,255,.22);
+  -webkit-backdrop-filter:blur(6px); backdrop-filter:blur(6px);
+}
+.dhead .spill.b{background:var(--fill-mint); border-color:transparent}
+.dhead .spill.a{background:var(--fill-coral); border-color:transparent}
+.dhead .spill.p{background:var(--fill-blue); border-color:transparent}
+.dhead .spill.s{background:var(--fill-gold); border-color:transparent}
+.dhead .spill.r{background:var(--fill-slate); border-color:transparent}
+.dhead .spill.x, .dhead .spill.no{background:var(--fill-lilac); border-color:transparent}
+.dhead .starbtn:not(.on), .dhead .starbtn.ro:not(.on):hover{color:rgba(255,255,255,.55)}
+.dhead .starbtn:not(.ro):hover{color:#ffce33}
+@media (max-width:640px){
+  .dhead{flex-direction:column; align-items:flex-start; gap:18px}
+  .cover-slot.has-img img, .cover-slot.has-img img.wide{max-width:62vw; max-height:320px}
+}
+
+/* ---------- game page: body ---------- */
+/* Two columns on a wide screen: reading on the left (description, notes,
+   relationships), facts on the right (ownership, tags). Each section is a
+   panel. On a narrow screen the columns dissolve (`display:contents`) and the
+   sections fall back into the page's long-standing single order - ownership
+   straight after the description, because that is the main thing a game is
+   looked up for. The `order` values below are what encode both sequences. */
+.dbody{display:grid; grid-template-columns:minmax(0,1.5fr) minmax(0,1fr); gap:20px; align-items:start; margin-top:46px}
+.dcol{display:flex; flex-direction:column; gap:18px; min-width:0}
+.dbody .fieldset{
+  margin:0; padding:18px 20px; background:var(--panel); border:1px solid var(--line);
+  border-radius:var(--r); box-shadow:var(--sh);
+}
+.dbody .desc, .dbody .desc-empty{margin:0; box-shadow:var(--sh)}
+.dbody .desc{padding:18px 20px; font-size:14.5px; line-height:1.66}
+.sec-desc{order:1} .sec-notes{order:2} .sec-switch{order:3} .sec-rel{order:4}
+.sec-own{order:1} .sec-tags{order:2}
+@media (max-width:860px){
+  .dbody{display:flex; flex-direction:column; align-items:stretch; gap:16px; margin-top:34px}
+  .dcol{display:contents}
+  .sec-desc{order:1} .sec-own{order:2} .sec-tags{order:3}
+  .sec-rel{order:4} .sec-notes{order:5} .sec-switch{order:6}
+}
+.dbody + .slug{margin-top:22px}

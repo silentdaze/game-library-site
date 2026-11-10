@@ -276,6 +276,66 @@ function layoutPref(v) {
   return v;
 }
 
+/* Light / dark. One small button in the header, no "Auto" option to explain:
+   the page follows the device until the button is clicked, a click flips it,
+   and flipping back to what the device wants anyway DROPS the saved choice -
+   so the page is following the device again without a third state.
+
+   The inline script in index.html has already set `data-theme` before first
+   paint, using the same key and the same rule. This block only owns the
+   button and keeps the attribute current afterwards. The icon shows the mode
+   a click switches TO, and the label says so in words. */
+const THEME_KEY = 'gl.theme';
+const THEME_ICON = {
+  light: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"></path></svg>',
+  dark: '<svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round"><path d="M20.5 14.5A8.5 8.5 0 0 1 9.5 3.5a8.5 8.5 0 1 0 11 11z"></path></svg>',
+};
+(function initTheme() {
+  const btn = document.getElementById('themebtn');
+  const device = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : { matches: false };
+  let saved = null;
+  try { saved = localStorage.getItem(THEME_KEY); } catch (e) { /* no storage: follows the device */ }
+  if (saved !== 'light' && saved !== 'dark') saved = null;
+  const isDark = () => saved ? saved === 'dark' : device.matches;
+  const paint = () => {
+    document.documentElement.setAttribute('data-theme', isDark() ? 'dark' : 'light');
+    if (!btn) return;
+    const to = isDark() ? 'light' : 'dark';
+    btn.innerHTML = THEME_ICON[to];
+    btn.title = 'Switch to ' + to + ' mode';
+    btn.setAttribute('aria-label', btn.title);
+  };
+  if (btn) btn.onclick = () => {
+    const next = isDark() ? 'light' : 'dark';
+    saved = (next === 'dark') === device.matches ? null : next;
+    try { saved ? localStorage.setItem(THEME_KEY, saved) : localStorage.removeItem(THEME_KEY); }
+    catch (e) { /* no storage: the choice lasts until the tab closes */ }
+    paint();
+  };
+  /* The device flipping (sunset schedules do this) should carry the page with
+     it whenever no choice is saved. */
+  if (device.addEventListener) device.addEventListener('change', paint);
+  paint();
+})();
+
+/* Shimmer-then-fade for cover art. Call AFTER `img.src` is set. `host` is the
+   element that shows the shimmer (`.cov` or `.card`).
+
+   An image the browser already holds reports `complete` synchronously, and
+   for those this does nothing at all - no class, no fade. That is the point:
+   every filter change rebuilds the list, and re-fading covers that are
+   already on screen would flicker on each keystroke. Only an image genuinely
+   still loading (first visit, slow connection, a lazy one scrolled into view)
+   gets the placeholder. Error clears it too, so a missing file never shimmers
+   forever. */
+function coverFade(img, host) {
+  if (img.complete && img.naturalWidth) return;
+  host.classList.add('pending');
+  const done = () => host.classList.remove('pending');
+  img.addEventListener('load', done);
+  img.addEventListener('error', done);
+}
+
 /* Whether a given dropdown (keyed by filter id - "platform", "genre", ...)
    lists its choices most-common-first (the site's own long-standing default)
    or A-Z. Per FIELD rather than one site-wide switch: Platform and Genre are
@@ -738,6 +798,7 @@ function rowNode(r) {
     img.onload = () => fitShape(img);
     img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.textContent = 'no cover'; };
+    coverFade(img, cov);
     cov.appendChild(img);
   } else cov.textContent = 'no cover';
   a.appendChild(cov);
@@ -809,6 +870,7 @@ function cardNode(r) {
     const img = el('img'); img.loading = 'lazy'; img.alt = '';
     img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); a.classList.remove('has-cover'); a.classList.add('no-cover'); };
+    coverFade(img, a);
     art.appendChild(img);
   }
   if (sl) art.appendChild(el('span', 'card-chip ' + sl.cls, shortStatus(g)));
@@ -986,10 +1048,61 @@ function loadDescriptions() {
   return DESC_PROMISE;
 }
 
+/* The game page's blurred band (`#herobg`, styled in styles.css). It sits
+   outside `#view`, so it has to be switched on and off by hand: showHero()
+   from renderDetail() once a game is found, clearHero() from route() on every
+   navigation and from renderDetail() itself, so the "No such game" page and
+   every non-game view are guaranteed to be without it.
+
+   Its height is not a fixed number. It is measured from the bottom of the
+   title block, because that moves: the cover's shape is unknown until the
+   image decodes, a long title wraps, and on a phone the cover stacks above
+   the title. A ResizeObserver on the title block catches all three. */
+let heroWatch = null;
+let heroFor = null;
+function clearHero() {
+  if (heroWatch) { heroWatch.disconnect(); heroWatch = null; }
+  window.removeEventListener('resize', fitHero);
+  heroFor = null;
+  document.body.classList.remove('has-hero');
+  const hb = $('#herobg');
+  if (!hb) return;
+  hb.hidden = true;
+  const im = $('#herobg-img');
+  im.classList.remove('on');
+  im.style.backgroundImage = '';
+}
+function fitHero() {
+  const head = document.querySelector('.dhead');
+  const hb = $('#herobg');
+  if (!head || !hb) return;
+  hb.style.height = Math.round(head.getBoundingClientRect().bottom + window.scrollY + 80) + 'px';
+}
+function showHero(id, head) {
+  const hb = $('#herobg');
+  if (!hb) return;
+  heroFor = id;
+  hb.hidden = false;
+  document.body.classList.add('has-hero');
+  fitHero();
+  if (window.ResizeObserver) { heroWatch = new ResizeObserver(fitHero); heroWatch.observe(head); }
+  window.addEventListener('resize', fitHero);
+}
+/* Called once the cover has actually loaded - never before, so a missing file
+   leaves the plain band rather than a broken background. The id check drops a
+   late image from a page already navigated away from. */
+function paintHero(id) {
+  if (heroFor !== id) return;
+  const im = $('#herobg-img');
+  im.style.backgroundImage = 'url("covers/' + id + '.webp")';
+  im.classList.add('on');
+}
+
 function renderDetail(id) {
   const g = GAMES.find(x => x.id === id);
   const view = $('#view');
   state.mode = 'detail';
+  clearHero();
   view.replaceChildren();
   $('#browse').hidden = true;
   $('#stats').hidden = true;
@@ -1044,10 +1157,13 @@ function renderDetail(id) {
   const head = el('div', 'dhead');
   const cov = el('div', 'cover-slot');
   if (hasCover(g.id)) {
-    const img = el('img'); img.alt = '';
-    img.onload = () => fitShape(img);
+    /* `has-img` is what lets the slot take the picture's own shape. It comes
+       off again on error, which puts the fixed placeholder box back. */
+    cov.classList.add('has-img');
+    const img = el('img'); img.alt = 'Cover art for ' + g.title;
+    img.onload = () => { fitShape(img); paintHero(g.id); };
     img.src = 'covers/' + g.id + '.webp';
-    img.onerror = () => { img.remove(); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
+    img.onerror = () => { img.remove(); cov.classList.remove('has-img'); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
     cov.appendChild(img);
   } else { cov.append('◻'); cov.appendChild(el('div', null, 'cover art')); cov.appendChild(el('div', null, 'coming soon')); }
   head.appendChild(cov);
@@ -1080,9 +1196,22 @@ function renderDetail(id) {
   if (g.access && g.access !== ownedText) st.appendChild(el('span', 'spill', g.access));
   st.appendChild(starButton(g.id));
   dt.appendChild(st);
-  dt.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
   head.appendChild(dt);
   view.appendChild(head);
+  showHero(g.id, head);
+
+  /* Everything under the hero goes into one of two columns - see "game page:
+     body" in styles.css for the layout and for why each section carries a
+     `sec-*` class. Reading on the left, facts on the right. */
+  const body = el('div', 'dbody');
+  const colMain = el('div', 'dcol');
+  const colSide = el('div', 'dcol');
+  body.append(colMain, colSide);
+  view.appendChild(body);
+  /* The cover's file path used to sit under the title. It is a maintenance
+     aid, not something a visitor reads, so it moved to the foot of the page
+     rather than into the hero. */
+  view.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
 
   /* Descriptions live in their own file and are fetched the first time any
      detail page opens - never in `library.json`, which every visit loads to
@@ -1093,25 +1222,25 @@ function renderDetail(id) {
      14-tag allowlist with every attribute dropped: no `img`, `iframe`, `a`,
      `script`, `src` or `href` survives, so `innerHTML` here has nothing left to
      inject. Verified on all 4,150 values. */
-  const dbox = el('div', 'desc-empty', 'Loading description…');
-  view.appendChild(dbox);
+  const dbox = el('div', 'desc-empty sec-desc', 'Loading description…');
+  colMain.appendChild(dbox);
   loadDescriptions().then(map => {
     const html = map && map[g.id];
     if (html) {
-      dbox.className = 'desc';
+      dbox.className = 'desc sec-desc';
       dbox.innerHTML = html;
     } else {
-      dbox.className = 'desc-empty';
+      dbox.className = 'desc-empty sec-desc';
       dbox.textContent = 'No description yet.';
     }
   }).catch(() => {
-    dbox.className = 'desc-empty';
+    dbox.className = 'desc-empty sec-desc';
     dbox.textContent = 'No description yet.';
   });
 
   /* Ownership & access first - it is the main thing you want when you look a
      game up. Tags second. */
-  const own = el('div', 'fieldset');
+  const own = el('div', 'fieldset sec-own');
   own.appendChild(el('div', 'fs-label', 'Ownership & access'));
   const dl1 = el('dl', 'kv');
   const kv = (dl, k, node) => { dl.appendChild(el('dt', null, k)); const d = el('dd'); d.appendChild(node); dl.appendChild(d); };
@@ -1193,9 +1322,9 @@ function renderDetail(id) {
      never assumed. Handoff 9.13. */
   if (g.completed) kv(dl1, (statusMeta(g) || {}).dateLabel || 'Completed', el('span', 'plain mono', g.completed));
   own.appendChild(dl1);
-  view.appendChild(own);
+  colSide.appendChild(own);
 
-  const tags = el('div', 'fieldset');
+  const tags = el('div', 'fieldset sec-tags');
   tags.appendChild(el('div', 'fs-label', 'Tags — every one filters the library'));
   const dl2 = el('dl', 'kv');
   TAG_AXES.forEach(([key, label]) => {
@@ -1220,13 +1349,13 @@ function renderDetail(id) {
     g.shelf.forEach(s => { const a = el('a', 'tagl shelf', s); a.href = '#/?shelf=' + encodeURIComponent(s); w.appendChild(a); });
     kv(dl2, 'Switch shelf', w);
   }
-  if (dl2.childNodes.length) { tags.appendChild(dl2); view.appendChild(tags); }
+  if (dl2.childNodes.length) { tags.appendChild(dl2); colSide.appendChild(tags); }
 
   /* The five relationship columns get five separate boxes. Conflating them has
      caused real bugs - handoff 4. */
   const rels = REL.filter(([k]) => (g[k] || []).length);
   if (rels.length) {
-    const fs = el('div', 'fieldset');
+    const fs = el('div', 'fieldset sec-rel');
     fs.appendChild(el('div', 'fs-label', 'Relationships — five separate questions'));
     const box = el('div', 'rel');
     const doneMap = {};
@@ -1309,7 +1438,7 @@ function renderDetail(id) {
       box.appendChild(b);
     });
     fs.appendChild(box);
-    view.appendChild(fs);
+    colMain.appendChild(fs);
   }
 
   if ((g.completionNotes || []).length) {
@@ -1317,18 +1446,18 @@ function renderDetail(id) {
        the detail the status deliberately no longer does (handoff 9.13), so it
        gets its own heading rather than being called a completion. */
     const sm = statusMeta(g);
-    const fs = el('div', 'fieldset');
+    const fs = el('div', 'fieldset sec-notes');
     fs.appendChild(el('div', 'fs-label', (sm && sm.notesLabel) || 'Completion notes'));
     const n = el('div', 'notes' + (sm && sm.cls !== 'b' ? ' ' + sm.cls : ''));
     g.completionNotes.forEach(t => n.appendChild(el('p', null, t)));
     fs.appendChild(n);
-    view.appendChild(fs);
+    colMain.appendChild(fs);
   }
   if (g.switchNotes) {
-    const fs = el('div', 'fieldset');
+    const fs = el('div', 'fieldset sec-switch');
     fs.appendChild(el('div', 'fs-label', 'Switch notes'));
     fs.appendChild(el('div', 'plain', g.switchNotes));
-    view.appendChild(fs);
+    colMain.appendChild(fs);
   }
   window.scrollTo(0, 0);
 }
@@ -2200,6 +2329,7 @@ function route() {
   /* Every number on the Stats page is a link into the library, so leaving it by
      clicking one is the normal path, not an edge case. Closing here covers all
      of them at once - and the detail route below, which hides it separately. */
+  clearHero();
   const leftStats = state.mode === 'stats';
   if (leftStats) statsScroll = { url: lastStatsUrl, y: window.scrollY };
   if (!$('#stats').hidden) closeStats();
