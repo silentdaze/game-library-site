@@ -113,6 +113,61 @@ function starButton(id) {
   return b;
 }
 
+/* "Now playing" - the two to four games Justin is actually playing right now,
+   picked by hand the same way a star is. Added 2026-11-10. It is NOT the
+   `In Progress` status: that status marks a game he is partway through, which
+   may have sat untouched for a year, and he ruled it gets no shelf.
+
+   Stored by the same Worker as the stars, as a second list at `/playing`
+   (same public GET, same admin-token POST, same request body). `PLAYING` is an
+   ordered array, oldest first, because the shelf shows the latest pick first.
+
+   `playingAvailable` is only true once a GET has succeeded. Until the Worker
+   carries the second list the GET is a 404, and then nothing about this
+   feature renders at all - no shelf, no toggle - rather than a control that
+   silently fails. */
+const PLAYING_API = STARS_API.replace(/\/stars$/, '/playing');
+let PLAYING = [];
+let playingAvailable = false;
+function loadPlaying() {
+  return fetch(PLAYING_API)
+    .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+    .then(d => { PLAYING = d.ids || []; playingAvailable = true; })
+    .catch(() => { PLAYING = []; playingAvailable = false; });
+}
+function paintPlaying(btn, id) {
+  const on = PLAYING.includes(id);
+  btn.classList.toggle('on', on);
+  btn.setAttribute('aria-pressed', String(on));
+  btn.textContent = on ? '▶ Now playing' : '＋ Now playing';
+  btn.title = on ? 'Remove from Now playing' : 'Add to Now playing';
+}
+/* Optimistic, with rollback - the same contract as setStar(). */
+function setPlaying(id, on, btn) {
+  if (!IS_ADMIN) return;
+  const before = PLAYING.slice();
+  PLAYING = PLAYING.filter(x => x !== id);
+  if (on) PLAYING.push(id);
+  paintPlaying(btn, id);
+  fetch(PLAYING_API, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + ADMIN_TOKEN },
+    body: JSON.stringify({ id, starred: on })
+  }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); })
+    .catch(() => { PLAYING = before; paintPlaying(btn, id); });
+}
+/* On the game page only. The owner gets a toggle; everyone else sees a plain
+   pill, and only on a game that is actually on the list. */
+function playingControl(id) {
+  if (!playingAvailable) return null;
+  if (!IS_ADMIN) return PLAYING.includes(id) ? el('span', 'spill playing', '▶ Now playing') : null;
+  const b = el('button', 'spill playing');
+  b.type = 'button';
+  paintPlaying(b, id);
+  b.onclick = () => setPlaying(id, !PLAYING.includes(id), b);
+  return b;
+}
+
 /* Owning tokens - handoff 3.2. Never test for the bare "Owned" token. */
 
 /* Handoff 3.3b: `Status` has FIVE values, not four. `Sampled` arrived at v73,
@@ -436,7 +491,9 @@ const SORTS = {
   title:     { label: 'A\u2013Z',    rev: 'Z\u2013A',   name: 'Alphabetical' },
   /* label = ascending, rev = descending. */
   release:   { label: 'Oldest',   rev: 'Newest', name: 'Release date' },
-  completed: { label: 'Earliest', rev: 'Latest', name: 'Completion date' }
+  completed: { label: 'Earliest', rev: 'Latest', name: 'Completion date' },
+  /* Workbook column `Date Added`, v277. See addedRank(). */
+  added:     { label: 'First added', rev: 'Recently added', name: 'Date added' }
 };
 
 /* ---------------------------------------------------------------- helpers */
@@ -660,6 +717,35 @@ function releaseKey(g) {
   return y ? +y[1] * 10000 : null;
 }
 
+/* "Recently added" - Justin's rule, 2026-11-10. Only games added after the
+   original import carry a `dateAdded`; the import itself was one undated
+   dump. So the order is three tiers:
+
+     2  dated games, by date added (same day: later workbook row = later)
+     1  the original import, by release date
+     0  original-import games with no release date either
+
+   Descending ("Recently added") runs 2, 1, 0, newest first inside each.
+   Ascending is the exact reverse for tiers 1 and 2 - the import's oldest
+   releases first, the newest addition last - which is what "first added"
+   means. Tier 0 stays at the bottom both ways, like every other no-value case
+   on this menu. `_i` is the game's position in the payload, set at boot. */
+function addedRank(g) {
+  if (g.dateAdded) return [2, +g.dateAdded.replace(/-/g, '') * 100000 + g._i];
+  const r = releaseKey(g);
+  return r == null ? [0, 0] : [1, r];
+}
+function compareAdded(a, b, dir) {
+  const [ta, va] = addedRank(a), [tb, vb] = addedRank(b);
+  if (ta === 0 || tb === 0) {
+    if (ta !== tb) return ta === 0 ? 1 : -1;
+    return a.title.localeCompare(b.title, 'en', { numeric: true });
+  }
+  if (ta !== tb) return (ta - tb) * dir;
+  if (va !== vb) return (va - vb) * dir;
+  return a.title.localeCompare(b.title, 'en', { numeric: true });
+}
+
 /* Games with no value for the chosen sort always sink to the bottom, in BOTH
    directions. Justin asked for this on completion date specifically: flipping
    between most- and least-recent should never float 3,846 unplayed games to
@@ -669,6 +755,7 @@ function sortResults(list) {
   const key = state.sort === 'release' ? releaseKey
             : state.sort === 'completed' ? (g => (g.status === 'Unplayed' ? null : quarterKey(g.completed)))
             : null;
+  if (state.sort === 'added') { list.sort((a, b) => compareAdded(a.g, b.g, dir)); return; }
   list.sort((a, b) => {
     if (key) {
       const ka = key(a.g), kb = key(b.g);
@@ -756,7 +843,70 @@ function passes(g) {
   return true;
 }
 
+/* ---------------------------------------------------------------- shelves */
+
+/* Side-scrolling rows above the list, agreed with Justin 2026-11-10. They
+   show ONLY on the untouched Library view: any search, filter or sort choice
+   hides them, so they never sit between a question and its answer.
+
+   Every shelf is derived at render time and an empty shelf renders nothing:
+     Now playing       hand-picked, the `/playing` list (see loadPlaying)
+     Recently added    the newest `dateAdded` rows, same order as the sort
+     Recently played   newest `Completed` first
+     Priority backlog  the starred games, latest star first
+
+   "Recently played" takes every status EXCEPT the three named here, rather
+   than naming the ones it wants: a status the workbook invents later then
+   shows up on the shelf where it can be noticed, instead of being dropped in
+   silence - the failure this project has had five times with hand-written
+   status lists. `Abandoned` is out because its date is when he stopped, and
+   `In Progress` because Justin ruled it gets no shelf (and it carries no date
+   anyway). */
+const SHELF_SIZE = 14;
+const NOT_RECENTLY_PLAYED = ['Unplayed', 'Abandoned', 'In Progress'];
+function shelfNode(title, games, moreHref) {
+  if (!games.length) return null;
+  const s = el('section', 'shelf');
+  const head = el('div', 'shelf-h');
+  head.appendChild(el('h2', null, title));
+  if (moreHref) { const a = el('a', null, 'See all'); a.href = moreHref; head.appendChild(a); }
+  s.appendChild(head);
+  const row = el('div', 'shelf-row');
+  games.forEach(g => row.appendChild(cardNode({ g })));
+  s.appendChild(row);
+  return s;
+}
+function renderShelves() {
+  const box = $('#shelves');
+  box.replaceChildren();
+  const pristine = state.mode === 'list' && state.view === 'library' && !state.q &&
+    !activeFilterCount() && state.sort === 'title' && state.dir === 'asc';
+  box.hidden = !pristine;
+  if (!pristine) return;
+  const byId = new Map(GAMES.map(g => [g.id, g]));
+  const pick = ids => ids.map(id => byId.get(id)).filter(Boolean);
+  const title = (a, b) => a.title.localeCompare(b.title, 'en', { numeric: true });
+
+  const playing = pick(PLAYING).reverse();
+  /* passes() so the Hidden rules apply here exactly as they do to the list
+     below - a hidden itch.io bundle game must not resurface on a shelf. */
+  const added = GAMES.filter(g => g.dateAdded && passes(g))
+    .sort((a, b) => compareAdded(a, b, -1)).slice(0, SHELF_SIZE);
+  const played = GAMES.filter(g => g.completed && !NOT_RECENTLY_PLAYED.includes(g.status))
+    .sort((a, b) => (quarterKey(b.completed) || 0) - (quarterKey(a.completed) || 0) || title(a, b))
+    .slice(0, SHELF_SIZE);
+  const backlog = pick([...STARS]).reverse().slice(0, SHELF_SIZE);
+
+  [shelfNode('Now playing', playing),
+   shelfNode('Recently added', added, '#/?sort=added:desc'),
+   shelfNode('Recently played', played, '#/played?sort=completed:desc'),
+   shelfNode('Priority backlog', backlog, '#/?status=backlog')
+  ].forEach(n => { if (n) box.appendChild(n); });
+  if (!box.childNodes.length) box.hidden = true;
+}
+
 function compute() {
+  renderShelves();
   RESULTS = search(state.q).filter(r => passes(r.g));
   /* A typed query with the sort control still at its untouched default (A-Z,
      ascending) ranks by relevance instead - that is what makes "mario wonder"
@@ -1239,6 +1389,8 @@ function renderDetail(id) {
      "Not owned" twice for exactly this reason. */
   if (g.access && g.access !== ownedText) st.appendChild(el('span', 'spill', g.access));
   st.appendChild(starButton(g.id));
+  const np = playingControl(g.id);
+  if (np) st.appendChild(np);
   dt.appendChild(st);
   head.appendChild(dt);
   view.appendChild(head);
@@ -1361,6 +1513,14 @@ function renderDetail(id) {
   /* Finished / stopped / played - three meanings, so the label is looked up,
      never assumed. Handoff 9.13. */
   if (g.completed) kv(dl1, (statusMeta(g) || {}).dateLabel || 'Completed', el('span', 'plain mono', g.completed));
+  /* Only games added after the original import have one - blank is normal and
+     renders nothing. Built from the parts, not `new Date(string)`, which
+     would read YYYY-MM-DD as UTC and show the previous day in US time zones. */
+  if (g.dateAdded) {
+    const [y, m, d] = g.dateAdded.split('-').map(Number);
+    const when = new Date(y, m - 1, d).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' });
+    kv(dl1, 'Added', el('span', 'plain', when));
+  }
   own.appendChild(dl1);
   colSide.appendChild(own);
 
@@ -2384,12 +2544,23 @@ const canMorph = () => !!document.startViewTransition &&
 /* The list row or grid card image for a game, only if it is actually on
    screen - animating from a tile scrolled far out of view would fly the cover
    in from nowhere. */
+let tileFrom = '#view';
+document.addEventListener('click', e => {
+  const a = e.target.closest && e.target.closest('a[href^="#/game/"]');
+  if (a) tileFrom = a.closest('#shelves') ? '#shelves' : '#view';
+}, true);
 function tileImage(id) {
-  const a = document.querySelector('#view a[href="#/game/' + CSS.escape(id) + '"]');
-  const img = a && a.querySelector('img');
-  if (!img) return null;
-  const r = img.getBoundingClientRect();
-  return (r.bottom > 0 && r.top < window.innerHeight) ? img : null;
+  /* A game can sit on a shelf AND in the list. Use the one that was clicked,
+     and fall back to the other - both on the way in and on the way back. */
+  const sel = ' a[href="#/game/' + CSS.escape(id) + '"] img';
+  const other = tileFrom === '#shelves' ? '#view' : '#shelves';
+  for (const box of [tileFrom, other]) {
+    for (const img of document.querySelectorAll(box + sel)) {
+      const r = img.getBoundingClientRect();
+      if (r.bottom > 0 && r.top < window.innerHeight && r.right > 0 && r.left < window.innerWidth) return img;
+    }
+  }
+  return null;
 }
 function route() {
   const path = (location.hash.replace(/^#/, '') || '/').split('?')[0];
@@ -2526,10 +2697,13 @@ Promise.all([
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
   /* Never lets a slow/unreachable Worker block the library from loading -
      loadStars() always resolves, empty set on failure. */
-  loadStars()
+  loadStars(),
+  loadPlaying()
 ])
   .then(([d]) => {
     DATA = d; META = d.meta; GAMES = d.games;
+    /* Payload position, which is workbook row order - addedRank()'s tie-break. */
+    GAMES.forEach((g, i) => { g._i = i; });
     buildIndex();
     const c = META.counts;
     /* The games count moved out of the wordmark and into its own `Logged`

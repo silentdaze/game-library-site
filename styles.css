@@ -914,3 +914,34 @@ body:has(#browse[hidden]) .toolbar, body:has(#browse[hidden]) .stuck-mark{displa
 ::view-transition-group(gl-cover){animation-duration:.36s; animation-timing-function:cubic-bezier(.2,.75,.2,1)}
 ::view-transition-old(gl-cover), ::view-transition-new(gl-cover){height:100%; width:100%; object-fit:cover; border-radius:12px; overflow:hidden}
 ::view-transition-old(root), ::view-transition-new(root){animation-duration:.22s}
+
+/* ---------- home-page shelves ---------- */
+/* Side-scrolling rows of the same cards the grid uses, at a fixed width. The
+   row bleeds out to the window edge (negative margin, matching padding) so
+   covers slide off the side of the screen instead of being cut at the page
+   gutter. The padding above and below leaves room for a card's hover lift,
+   which the scroll container would otherwise clip. */
+#shelves{display:flex; flex-direction:column; gap:20px; margin-top:20px}
+#shelves[hidden]{display:none}
+.shelf-h{display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:4px}
+.shelf-h h2{font-family:var(--display); font-size:18px; font-weight:600; letter-spacing:-.01em; margin:0; color:var(--ink)}
+.shelf-h a{font-size:13px; font-weight:700; text-decoration:none}
+.shelf-h a:hover{text-decoration:underline}
+.shelf-row{
+  display:flex; gap:14px; overflow-x:auto; margin:0 -22px; padding:8px 22px 16px;
+  scroll-snap-type:x proximity; scroll-padding-left:22px; scrollbar-width:thin;
+  scrollbar-color:var(--line-2) transparent;
+}
+.shelf-row .card{flex:0 0 150px; scroll-snap-align:start}
+@media (max-width:560px){
+  .shelf-row{gap:10px}
+  .shelf-row .card{flex-basis:118px}
+}
+
+/* "Now playing" on the game page. A button for the owner, a plain pill for
+   everyone else; solid when on, a quiet outline when off. */
+.spill.playing{font-family:var(--ui); cursor:default}
+button.spill.playing{cursor:pointer}
+.dhead .spill.playing.on, .dhead span.spill.playing{background:var(--fill-blue); border-color:transparent}
+.dhead button.spill.playing:not(.on){background:transparent; border-style:dashed; color:rgba(255,255,255,.8)}
+.dhead button.spill.playing:not(.on):hover{background:rgba(255,255,255,.14); color:#fff}
