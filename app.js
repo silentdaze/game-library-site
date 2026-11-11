@@ -864,16 +864,55 @@ function passes(g) {
    anyway). */
 const SHELF_SIZE = 14;
 const NOT_RECENTLY_PLAYED = ['Unplayed', 'Abandoned', 'In Progress'];
-function shelfNode(title, games, moreHref) {
+/* One small picture per shelf, all in the site's neutral blue. Deliberately
+   NOT the status colours: mint, coral, gold, slate and lilac each already mean
+   a specific status on these same cards, and a gold "Recently played" badge
+   would read as "Sampled". */
+const SHELF_ICON = {
+  playing: '<path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"></path>',
+  added:   '<path d="M12 5v14M5 12h14"></path>',
+  played:  '<path d="M5 12.5l4.5 4.5L19 7.5"></path>',
+  backlog: '<path d="M12 3.6l2.6 5.3 5.8.8-4.2 4.1 1 5.8L12 16.9l-5.2 2.7 1-5.8-4.2-4.1 5.8-.8z" fill="currentColor" stroke="none"></path>'
+};
+/* `kind` picks the icon and, for `playing`, the larger "featured" cards - the
+   two to four games he is on right now are the point of the page, so they
+   are physically bigger than a shelf of fourteen. The arrow buttons page the
+   row sideways; they are hidden on touch screens (where you just swipe) and
+   each one disables itself at its end of the row. */
+function shelfNode(kind, title, games, moreHref) {
   if (!games.length) return null;
-  const s = el('section', 'shelf');
+  const s = el('section', 'shelf shelf-' + kind);
   const head = el('div', 'shelf-h');
+  const ic = el('span', 'shelf-ic');
+  ic.innerHTML = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round">' + SHELF_ICON[kind] + '</svg>';
+  head.appendChild(ic);
   head.appendChild(el('h2', null, title));
-  if (moreHref) { const a = el('a', null, 'See all'); a.href = moreHref; head.appendChild(a); }
-  s.appendChild(head);
+  const tools = el('span', 'shelf-tools');
+  if (moreHref) { const a = el('a', null, 'See all'); a.href = moreHref; tools.appendChild(a); }
   const row = el('div', 'shelf-row');
+  const prev = el('button', 'shelf-nav', '‹'), next = el('button', 'shelf-nav', '›');
+  prev.type = next.type = 'button';
+  prev.setAttribute('aria-label', 'Scroll ' + title + ' back');
+  next.setAttribute('aria-label', 'Scroll ' + title + ' forward');
+  const page = dir => row.scrollBy({ left: dir * Math.max(200, row.clientWidth * 0.8), behavior: 'smooth' });
+  prev.onclick = () => page(-1);
+  next.onclick = () => page(1);
+  const ends = () => {
+    prev.disabled = row.scrollLeft <= 2;
+    next.disabled = row.scrollLeft + row.clientWidth >= row.scrollWidth - 2;
+    /* Nothing to page through (Now playing with three games): no arrows. */
+    const fits = row.scrollWidth <= row.clientWidth + 2;
+    prev.hidden = next.hidden = fits;
+    s.classList.toggle('more-right', !fits && !next.disabled);
+  };
+  row.addEventListener('scroll', ends, { passive: true });
+  tools.append(prev, next);
+  head.appendChild(tools);
+  s.appendChild(head);
   games.forEach(g => row.appendChild(cardNode({ g })));
   s.appendChild(row);
+  /* Measured after layout - the row has no width until it is in the page. */
+  requestAnimationFrame(ends);
   return s;
 }
 function renderShelves() {
@@ -882,6 +921,7 @@ function renderShelves() {
   const pristine = state.mode === 'list' && state.view === 'library' && !state.q &&
     !activeFilterCount() && state.sort === 'title' && state.dir === 'asc';
   box.hidden = !pristine;
+  $('#allhead').hidden = true;
   if (!pristine) return;
   const byId = new Map(GAMES.map(g => [g.id, g]));
   const pick = ids => ids.map(id => byId.get(id)).filter(Boolean);
@@ -897,12 +937,14 @@ function renderShelves() {
     .slice(0, SHELF_SIZE);
   const backlog = pick([...STARS]).reverse().slice(0, SHELF_SIZE);
 
-  [shelfNode('Now playing', playing),
-   shelfNode('Recently added', added, '#/?sort=added:desc'),
-   shelfNode('Recently played', played, '#/played?sort=completed:desc'),
-   shelfNode('Priority backlog', backlog, '#/?status=backlog')
+  [shelfNode('playing', 'Now playing', playing),
+   shelfNode('added', 'Recently added', added, '#/?sort=added:desc'),
+   shelfNode('played', 'Recently played', played, '#/played?sort=completed:desc'),
+   shelfNode('backlog', 'Priority backlog', backlog, '#/?status=backlog')
   ].forEach(n => { if (n) box.appendChild(n); });
   if (!box.childNodes.length) box.hidden = true;
+  /* "All games" only makes sense as the heading under a set of shelves. */
+  $('#allhead').hidden = box.hidden;
 }
 
 function compute() {
