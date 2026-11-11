@@ -276,6 +276,48 @@ function layoutPref(v) {
   return v;
 }
 
+/* Whether the filter row under the toolbar is showing. Added 2026-11-10 with
+   the compact toolbar: the four dropdowns used to sit on the opening screen
+   permanently, and with the search bar, tabs and result bar they pushed the
+   first game half a screen down. Closed by default; the toolbar's Filters
+   button opens it and the choice is remembered on this browser.
+
+   `filtersShown` can also be switched on WITHOUT being remembered - route()
+   does that when the page is reached with a filter already set (a tag link on
+   a game page, a shared link), so the control that did it is on screen and
+   clearable rather than an invisible reason the list is short. The Filters
+   button also carries a count of active filters for when the row is closed. */
+const FILTERS_KEY = 'gl.filters.shown';
+function filtersPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(FILTERS_KEY) === '1';
+    localStorage.setItem(FILTERS_KEY, v ? '1' : '0');
+  } catch (e) { /* no storage: the row starts closed each visit */ }
+  return v;
+}
+let filtersShown = filtersPref();
+
+/* How many filters are set - every key "Clear filters" resets, nothing else.
+   Hide is deliberately not counted, for the same reason it is not cleared:
+   it is a display preference, not a filter (see the end of buildFilters). */
+function activeFilterCount() {
+  let n = 0;
+  ['platform', 'store', 'category', 'status', 'flag'].forEach(k => { if (state[k]) n++; });
+  TAG_AXES.forEach(([k]) => { if (state[k]) n++; });
+  LINK_FILTERS.forEach(([k]) => { if (state[k]) n++; });
+  return n;
+}
+function paintFilterButton() {
+  const n = activeFilterCount();
+  const btn = $('#filtbtn'), cnt = $('#filtcnt');
+  $('#filters').hidden = !filtersShown;
+  btn.classList.toggle('on', filtersShown);
+  btn.classList.toggle('active', n > 0);
+  btn.setAttribute('aria-expanded', String(filtersShown));
+  cnt.hidden = !n;
+  cnt.textContent = String(n);
+}
+
 /* Light / dark. One small button in the header, no "Auto" option to explain:
    the page follows the device until the button is clicked, a click flips it,
    and flipping back to what the device wants anyway DROPS the saved choice -
@@ -1144,6 +1186,7 @@ function renderDetail(id) {
     return;
   }
   document.title = g.title + ' — Game Library';
+  state.detailId = g.id;
 
   const crumb = el('div', 'crumb');
   /* The last library URL actually visited, filters and search intact - never
@@ -1161,6 +1204,7 @@ function renderDetail(id) {
        off again on error, which puts the fixed placeholder box back. */
     cov.classList.add('has-img');
     const img = el('img'); img.alt = 'Cover art for ' + g.title;
+    if (morphId === g.id) img.style.viewTransitionName = MORPH_NAME;
     img.onload = () => { fitShape(img); paintHero(g.id); };
     img.src = 'covers/' + g.id + '.webp';
     img.onerror = () => { img.remove(); cov.classList.remove('has-img'); cov.append('◻', el('div', null, 'cover art'), el('div', null, 'coming soon')); };
@@ -1208,10 +1252,6 @@ function renderDetail(id) {
   const colSide = el('div', 'dcol');
   body.append(colMain, colSide);
   view.appendChild(body);
-  /* The cover's file path used to sit under the title. It is a maintenance
-     aid, not something a visitor reads, so it moved to the foot of the page
-     rather than into the hero. */
-  view.appendChild(el('div', 'slug', hasCover(g.id) ? 'covers/' + g.id + '.webp' : g.id));
 
   /* Descriptions live in their own file and are fetched the first time any
      detail page opens - never in `library.json`, which every visit loads to
@@ -1741,6 +1781,7 @@ function buildFilters() {
     };
     box.appendChild(b);
   }
+  paintFilterButton();
 }
 
 /* ---------------------------------------------------------------- sort UI */
@@ -2321,7 +2362,70 @@ let backFromDetail = null;
    check below for why that guards against the tag-click case. */
 let listScroll = null;
 
+/* Page changes between the library and a game page animate: the cover that
+   was clicked grows into the game page's cover, and shrinks back into its
+   tile on the way back. Added 2026-11-10.
+
+   This is the browser's own View Transitions feature. route() hands it the
+   real page change to run; the browser photographs the page before and after
+   and animates between the two, and any element given the SAME
+   `view-transition-name` on both sides is animated as one object moving and
+   resizing. MORPH_NAME is put on exactly one image on each side, never more:
+   two elements sharing a name on one page makes the browser abandon the
+   animation (the page still changes, it just jumps).
+
+   Browsers without the feature, visitors who ask their device for reduced
+   motion, and every other kind of navigation (filters, stats, one game page
+   to another) take the plain route() path, unchanged. */
+const MORPH_NAME = 'gl-cover';
+let morphId = null;
+const canMorph = () => !!document.startViewTransition &&
+  !(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+/* The list row or grid card image for a game, only if it is actually on
+   screen - animating from a tile scrolled far out of view would fly the cover
+   in from nowhere. */
+function tileImage(id) {
+  const a = document.querySelector('#view a[href="#/game/' + CSS.escape(id) + '"]');
+  const img = a && a.querySelector('img');
+  if (!img) return null;
+  const r = img.getBoundingClientRect();
+  return (r.bottom > 0 && r.top < window.innerHeight) ? img : null;
+}
 function route() {
+  const path = (location.hash.replace(/^#/, '') || '/').split('?')[0];
+  const toGame = path.startsWith('/game/') ? path.slice(6) : null;
+  const fromGame = state.mode === 'detail' ? state.detailId : null;
+  const listToGame = toGame && state.mode === 'list';
+  const gameToList = fromGame && !toGame && path !== '/stats';
+  if (!canMorph() || !(listToGame || gameToList)) return routeNow();
+
+  const named = [];
+  const name = img => { if (img) { img.style.viewTransitionName = MORPH_NAME; named.push(img); } };
+  if (listToGame) {
+    name(tileImage(toGame));
+    morphId = toGame;
+  } else {
+    name(document.querySelector('.cover-slot img'));
+  }
+  const t = document.startViewTransition(() => {
+    routeNow();
+    /* The list was rebuilt and its scroll restored inside routeNow(), so the
+       tile can only be found now. */
+    if (gameToList) name(tileImage(fromGame));
+  });
+  /* A second click before the animation ends skips it - the page still
+     changes, so the rejection is expected and is silenced here rather than
+     logged as an error. */
+  t.ready.catch(() => {});
+  t.finished.catch(() => {}).finally(() => {
+    morphId = null;
+    named.forEach(img => { img.style.viewTransitionName = ''; });
+    const d = document.querySelector('.cover-slot img');
+    if (d) d.style.viewTransitionName = '';
+  });
+}
+
+function routeNow() {
   const hash = location.hash.replace(/^#/, '') || '/';
   const [path, qs] = hash.split('?');
   const params = new URLSearchParams(qs || '');
@@ -2379,6 +2483,7 @@ function route() {
     ? defaultHideIds()
     : hideParam.split(',').filter(id => validHideIds.has(id));
   state.hideOn = params.get('hideoff') !== '1';
+  if (activeFilterCount()) filtersShown = true;
   updateSortLabel();
   updateHideLabel();
   $('#q').value = state.q;
@@ -2523,6 +2628,38 @@ Promise.all([
     /* Stats opens over the library. It is a page, not a settings tray, which is
        why the browse bar goes away while it is up rather than sitting above it
        filtering a list nobody can see. */
+    /* Filters button. Closed -> open. Open and on screen -> closed. Open but
+       scrolled out of sight (the toolbar follows you down the list; the row
+       does not) -> brought back into view rather than closed, since closing
+       something you cannot see would look like the button did nothing. */
+    $('#filtbtn').onclick = () => {
+      const box = $('#filters');
+      const tb = $('#toolbar').getBoundingClientRect().bottom;
+      const scrollToRow = () => {
+        const top = box.getBoundingClientRect().top + window.scrollY - $('#toolbar').offsetHeight - 8;
+        if (box.getBoundingClientRect().top < tb) window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' });
+      };
+      if (!filtersShown) {
+        filtersShown = filtersPref(true);
+        paintFilterButton();
+        scrollToRow();
+        return;
+      }
+      if (box.getBoundingClientRect().bottom < tb + 20) { scrollToRow(); return; }
+      closeAllDropdowns();
+      filtersShown = filtersPref(false);
+      paintFilterButton();
+    };
+    /* The toolbar only wears its frosted background and shadow once it has
+       actually stuck to the top - at rest it sits on the page like the old
+       search bar did. A 1px marker just above it going out of view is the
+       signal; no scroll listener needed. */
+    if (window.IntersectionObserver) {
+      new IntersectionObserver(([e]) => {
+        $('#toolbar').classList.toggle('stuck', !e.isIntersecting && e.boundingClientRect.top < 0);
+      }).observe($('#stuck-mark'));
+    }
+
     $('#statsbtn').onclick = () => {
       if (state.mode === 'stats') { location.hash = lastListUrl; return; }
       statsFresh = true;

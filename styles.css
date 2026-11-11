@@ -98,12 +98,12 @@ a{color:var(--blue)}
 /* ---------- masthead ---------- */
 .masthead{display:flex; align-items:flex-start; justify-content:space-between; gap:18px; flex-wrap:wrap; padding:26px 0 0}
 .wordmark{font-family:var(--display); font-size:23px; font-weight:700; letter-spacing:-.02em; line-height:1.1; text-decoration:none; color:var(--ink)}
-.wordmark span{display:block; font-family:var(--mono); font-size:10px; font-weight:400; letter-spacing:.15em; text-transform:uppercase; color:var(--ink-3); margin-top:5px}
+.wordmark span{display:block; font-family:var(--mono); font-size:11px; font-weight:400; letter-spacing:.04em; color:var(--ink-3); margin-top:5px}
 .head-right{display:flex; align-items:center; gap:12px}
 .counts{display:flex; gap:9px}
 .cpill{background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:7px 13px; text-align:right}
 .cpill b{display:block; font-family:var(--mono); font-size:15px; font-weight:500; font-variant-numeric:tabular-nums; line-height:1.15}
-.cpill span{font-size:10px; color:var(--ink-3); text-transform:uppercase; letter-spacing:.07em}
+.cpill span{font-size:11.5px; color:var(--ink-3); font-weight:600}
 .cpill.m b{color:var(--mint)}
 /* A bar-chart icon, square, and exactly as tall as the count pills beside it.
    `align-self:stretch` takes the height from the row rather than naming a
@@ -121,7 +121,7 @@ a{color:var(--blue)}
 .statsbtn:hover{color:var(--blue); border-color:var(--blue-mid)}
 .statsbtn.on{color:var(--blue); background:var(--blue-soft); border-color:var(--blue-mid)}
 
-.searchbar{display:flex; align-items:center; gap:11px; margin-top:18px; border:1.5px solid var(--line-2); background:var(--panel); border-radius:11px; padding:2px 15px}
+.searchbar{flex:1; min-width:0; display:flex; align-items:center; gap:11px; border:1.5px solid var(--line-2); background:var(--panel); border-radius:11px; padding:2px 15px}
 .searchbar:focus-within{border-color:var(--blue-mid); box-shadow:0 0 0 3px var(--blue-soft)}
 .searchbar svg{flex:none; color:var(--ink-4)}
 .searchbar input{flex:1; border:0; background:transparent; font-family:var(--ui); font-size:15px; color:var(--ink); padding:12px 0; min-width:0}
@@ -130,13 +130,16 @@ a{color:var(--blue)}
 .searchbar .clear{border:0; background:transparent; color:var(--ink-4); cursor:pointer; font-size:18px; line-height:1; padding:4px 2px}
 .searchbar .clear:hover{color:var(--coral)}
 
-.navtabs{display:flex; gap:5px; margin-top:16px; border-bottom:1px solid var(--line-2)}
-.navtabs a{font-size:13.5px; color:var(--ink-3); padding:9px 14px; text-decoration:none; border-bottom:2.5px solid transparent; margin-bottom:-1px; border-radius:6px 6px 0 0}
+/* Library / Played, as a two-way switch at the start of the result bar.
+   It used to be a row of tabs of its own above the filters. */
+.navtabs{display:inline-flex; padding:3px; gap:2px; border-radius:10px; background:var(--panel-3); border:1px solid var(--line)}
+.navtabs a{font-size:13px; font-weight:700; color:var(--ink-3); padding:6px 14px; text-decoration:none; border-radius:7px}
 .navtabs a:hover{color:var(--ink)}
-.navtabs a.on{color:var(--blue); border-bottom-color:var(--blue); font-weight:700}
+.navtabs a.on{color:var(--ink); background:var(--panel); box-shadow:0 1px 3px rgba(0,0,0,.12)}
 
 /* ---------- filters ---------- */
-.filters{display:flex; gap:9px; flex-wrap:wrap; padding-top:17px; align-items:flex-end}
+.filters{display:flex; gap:9px; flex-wrap:wrap; padding-top:14px; align-items:flex-end}
+.filters[hidden]{display:none}
 /* `position:relative` here, not on `.filters` - each field is its own
    anchor, so its panel (`.dpanel`, below) opens directly under ITS OWN
    trigger no matter where that trigger sits in the row. */
@@ -145,7 +148,7 @@ a{color:var(--blue)}
    Animating every group made the whole bar flash on each filter change. */
 .fgroup.appears{animation:pop .18s ease}
 @keyframes pop{from{opacity:0; transform:translateY(-3px)} to{opacity:1; transform:none}}
-.fgroup label{font-family:var(--mono); font-size:9.5px; letter-spacing:.13em; text-transform:uppercase; color:var(--ink-4)}
+.fgroup label{font-size:12px; font-weight:600; color:var(--ink-3)}
 
 /* The button that replaces a native <select> - same footprint and look the
    select had, so the row doesn't change shape, but this one can open a panel
@@ -203,8 +206,8 @@ a{color:var(--blue)}
   padding:11px 16px; border-bottom:1px solid var(--line);
 }
 .dphead h6{
-  margin:0; font-family:var(--mono); font-size:9.5px; letter-spacing:.14em;
-  text-transform:uppercase; color:var(--ink-4); font-weight:400; white-space:nowrap;
+  margin:0; font-family:var(--ui); font-size:12.5px; font-weight:700;
+  color:var(--ink-3); white-space:nowrap;
 }
 .ordertoggle{display:flex; border:1px solid var(--line-2); border-radius:7px; overflow:hidden; background:var(--panel-2); flex:none}
 .ordertoggle button{
@@ -275,8 +278,9 @@ a{color:var(--blue)}
   .morepanel .fgroup .dtrigger{width:100%; min-width:0}
 }
 
-.resultbar{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:17px 0 12px; margin-top:14px; border-bottom:1px solid var(--line-2)}
-.resultbar .n{font-size:13px; color:var(--ink-3)}
+.resultbar{display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; padding:14px 0 12px; margin-top:4px; border-bottom:1px solid var(--line-2)}
+.rleft{display:flex; align-items:center; gap:14px; flex-wrap:wrap}
+.resultbar .n{font-size:13.5px; color:var(--ink-3)}
 .resultbar .n b{font-family:var(--mono); font-weight:500; color:var(--ink); font-variant-numeric:tabular-nums}
 .viewtoggle{display:flex; border:1px solid var(--line-2); border-radius:9px; overflow:hidden; background:var(--panel-2)}
 .viewtoggle button{font-family:var(--ui); font-size:11.5px; padding:6px 12px; color:var(--ink-3); border:0; background:transparent; cursor:pointer}
@@ -307,10 +311,10 @@ a{color:var(--blue)}
 .rtitle .t{font-family:var(--display); font-weight:600; font-size:16.5px; letter-spacing:-.012em; line-height:1.22; color:var(--ink)}
 .row:hover .rtitle .t{color:var(--blue)}
 .rtitle .yr{font-family:var(--mono); font-size:11.5px; color:var(--ink-4); font-variant-numeric:tabular-nums}
-.meta{font-size:12.5px; color:var(--ink-3); margin-top:4px; display:flex; flex-wrap:wrap; gap:0 7px; align-items:baseline}
+.meta{font-size:13px; color:var(--ink-3); margin-top:4px; display:flex; flex-wrap:wrap; gap:0 7px; align-items:baseline}
 .meta .sep{color:var(--ink-4)}
 .meta em{font-style:normal; color:var(--ink-2)}
-.st{font-family:var(--mono); font-size:11px; letter-spacing:.03em; font-weight:500}
+.st{font-size:12.5px; font-weight:700}
 .st.b{color:var(--mint)} .st.a{color:var(--coral)} .st.p{color:var(--blue)}
 .st.s{color:var(--gold)} .st.r{color:var(--slate)} .st.x{color:var(--lilac)}
 .whisper{font-size:11.5px; color:var(--ink-4)}
@@ -319,8 +323,8 @@ a{color:var(--blue)}
 .inside{margin-top:8px; font-size:12.5px; color:var(--blue); background:var(--blue-soft); border:1px solid var(--blue-line); border-radius:var(--r-sm); padding:6px 11px; display:inline-block}
 .inside b{font-weight:700}
 .rright{text-align:right; display:flex; flex-direction:column; gap:3px; align-items:flex-end}
-.rright .plat{font-size:11.5px; color:var(--ink-3); white-space:nowrap}
-.rright .len{font-family:var(--mono); font-size:10.5px; color:var(--ink-4); white-space:nowrap}
+.rright .plat{font-size:12.5px; color:var(--ink-3); white-space:nowrap}
+.rright .len{font-size:12px; color:var(--ink-4); white-space:nowrap}
 @media(max-width:620px){
   .row{grid-template-columns:44px 1fr auto; padding-left:12px}
   .cov{width:44px; height:60px}
@@ -392,8 +396,8 @@ a{color:var(--blue)}
 .card-art img{width:100%; height:100%; object-fit:cover; display:block}
 .card-chip{
   position:absolute; top:8px; left:8px; z-index:1;
-  font-family:var(--mono); font-size:9px; font-weight:700; letter-spacing:.04em;
-  color:#fff; padding:3px 8px; border-radius:20px; box-shadow:0 1px 3px rgba(29,42,58,.35);
+  font-size:10.5px; font-weight:700;
+  color:#fff; padding:2px 9px; border-radius:20px; box-shadow:0 1px 3px rgba(29,42,58,.35);
 }
 .card-chip.b{background:var(--fill-mint)} .card-chip.a{background:var(--fill-coral)}
 .card-chip.p{background:var(--fill-blue)} .card-chip.s{background:var(--fill-gold)}
@@ -407,11 +411,11 @@ a{color:var(--blue)}
 .card.has-cover .card-t{color:#fff; text-shadow:0 1px 4px rgba(29,42,58,.5)}
 .card.has-cover .card-p{color:rgba(255,255,255,.8)}
 .card-t{
-  font-family:var(--display); font-weight:600; font-size:12.5px; line-height:1.3;
+  font-family:var(--display); font-weight:600; font-size:13.5px; line-height:1.3;
   letter-spacing:-.005em; display:-webkit-box; -webkit-line-clamp:3; -webkit-box-orient:vertical;
   overflow:hidden;
 }
-.card-p{font-family:var(--mono); font-size:9.5px; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink-3)}
+.card-p{font-size:11px; margin-top:3px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; color:var(--ink-3)}
 /* No cover art (roughly one in twenty rows, and always will be some - the
    remaining rows will never be filled from Playnite). Same tile shape, same
    chip, but the title sits directly on the placeholder background instead of
@@ -423,8 +427,8 @@ a{color:var(--blue)}
 .card.no-cover .card-t{color:var(--ink-2)}
 @media(max-width:560px){
   .cardgrid{grid-template-columns:repeat(auto-fill,minmax(112px,1fr)); gap:10px}
-  .card-t{font-size:11.5px}
-  .card-chip{font-size:8px; padding:2px 6px}
+  .card-t{font-size:12.5px}
+  .card-chip{font-size:9.5px; padding:2px 7px}
 }
 
 .empty{padding:60px 20px; text-align:center; color:var(--ink-3)}
@@ -454,15 +458,14 @@ a{color:var(--blue)}
 .spill.r{background:var(--slate-soft); border-color:var(--slate-line); color:var(--slate)}
 .spill.x{background:var(--lilac-soft); border-color:var(--lilac-line); color:var(--lilac)}
 .spill.no{background:var(--lilac-soft); border-color:var(--lilac-line); color:var(--lilac)}
-.slug{font-family:var(--mono); font-size:10.5px; color:var(--ink-4); margin-top:12px}
 
 .desc{font-size:14.5px; line-height:1.62; color:var(--ink-2); margin:18px 0 0; padding:15px 17px; background:var(--blue-soft); border:1px solid var(--blue-line); border-radius:var(--r)}
 .desc-empty{margin:18px 0 0; padding:15px 17px; border:1.5px dashed var(--line-2); border-radius:var(--r); background:var(--panel-2); font-size:12.5px; color:var(--ink-3)}
 
 .fieldset{margin-top:22px; border-top:1px solid var(--line-2); padding-top:16px}
-.fs-label{font-family:var(--mono); font-size:9.5px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-4); margin-bottom:12px}
+.fs-label{font-family:var(--display); font-size:16px; font-weight:600; letter-spacing:-.01em; color:var(--ink); margin-bottom:14px}
 .kv{display:grid; grid-template-columns:104px 1fr; gap:10px 14px; align-items:baseline; margin:0}
-.kv dt{font-family:var(--mono); font-size:10.5px; color:var(--ink-4); line-height:1.5}
+.kv dt{font-size:13px; color:var(--ink-3); line-height:1.5}
 .kv dd{margin:0; display:flex; flex-wrap:wrap; gap:6px}
 @media(max-width:560px){ .kv{grid-template-columns:1fr; gap:3px 0} .kv dd{margin-bottom:8px} }
 .tagl{font-size:12.5px; padding:3px 11px; border-radius:20px; text-decoration:none; background:var(--panel); border:1px solid var(--line-2); color:var(--ink-2)}
@@ -495,7 +498,7 @@ a{color:var(--blue)}
   border-bottom:1px solid var(--blue-mid)}
 .ce-store:hover{color:var(--ink); border-bottom-color:currentColor}
 .plain{font-size:13px; color:var(--ink-2)}
-.plain.mono{font-family:var(--mono); font-size:12px}
+.plain.mono{font-size:13px}
 
 .rel{display:flex; flex-direction:column; gap:11px}
 .relbox{border:1px solid var(--line); border-radius:var(--r); padding:12px 14px; background:var(--panel)}
@@ -530,7 +533,7 @@ a{color:var(--blue)}
 .tgl.on{background:var(--blue-mid)}
 .tgl i{position:absolute; top:2.5px; left:2.5px; width:12px; height:12px; border-radius:50%; background:#fff; display:block; box-shadow:0 1px 2px rgba(0,0,0,.2); transition:left .15s}
 .tgl.on i{left:15px}
-.foot-note{margin-top:16px; font-size:11.5px; color:var(--ink-4); font-family:var(--mono); line-height:1.6}
+.foot-note{margin-top:16px; font-size:12.5px; color:var(--ink-4); line-height:1.6}
 
 /* ---------- sort ---------- */
 .bar-right{display:flex; align-items:center; gap:9px}
@@ -548,8 +551,8 @@ a{color:var(--blue)}
   box-shadow:var(--sh-lg); padding:9px;
 }
 .sortmenu h6{
-  margin:4px 6px 7px; font-family:var(--mono); font-size:9.5px; letter-spacing:.13em;
-  text-transform:uppercase; color:var(--ink-4); font-weight:400;
+  margin:4px 6px 7px; font-family:var(--ui); font-size:12.5px; font-weight:700;
+  color:var(--ink-3);
 }
 .sortopt{
   display:flex; align-items:center; gap:9px; width:100%; text-align:left;
@@ -588,12 +591,12 @@ a{color:var(--blue)}
 }
 a.stile:hover{border-color:var(--blue-mid)}
 .stile b{display:block; font-family:var(--mono); font-size:23px; font-weight:500; line-height:1.15; color:var(--ink); font-variant-numeric:tabular-nums}
-.stile .sl{display:block; font-size:12px; color:var(--ink-2); font-weight:700; margin-top:3px}
-.stile .ss{display:block; font-size:11px; color:var(--ink-4); margin-top:1px}
+.stile .sl{display:block; font-size:13px; color:var(--ink-2); font-weight:700; margin-top:3px}
+.stile .ss{display:block; font-size:12px; color:var(--ink-4); margin-top:1px}
 
 .spanel{margin-top:20px}
 .spanel h3{font-family:var(--display); font-size:15px; font-weight:600; margin:0 0 2px; color:var(--ink)}
-.spanel .pnote{margin:0 0 11px; font-size:12px; color:var(--ink-4)}
+.spanel .pnote{margin:0 0 11px; font-size:13px; color:var(--ink-4)}
 /* Two ranked lists side by side on a wide screen, stacked on a narrow one. */
 .spair{display:grid; grid-template-columns:repeat(auto-fit,minmax(290px,1fr)); gap:22px}
 
@@ -654,7 +657,7 @@ button.col:hover .coly, .col.on .coly{color:var(--blue)}
 
 /* Status definitions, small print at the foot of the page. */
 .snotes{margin-top:28px; padding-top:12px; border-top:1px solid var(--line)}
-.snotes p{margin:0 0 4px; font-size:11.5px; color:var(--ink-4); line-height:1.55}
+.snotes p{margin:0 0 4px; font-size:12.5px; color:var(--ink-4); line-height:1.55}
 .snotes b{color:var(--ink-3); font-weight:700}
 
 @media (max-width:560px){
@@ -671,7 +674,7 @@ button.col:hover .coly, .col.on .coly{color:var(--blue)}
   border:1.5px solid var(--line-2); background:var(--panel); border-radius:10px;
 }
 .stab b{font-size:13px; font-weight:700; color:var(--ink-2)}
-.stab span{font-family:var(--mono); font-size:10px; color:var(--ink-4); font-variant-numeric:tabular-nums}
+.stab span{font-size:11.5px; color:var(--ink-4); font-variant-numeric:tabular-nums}
 .stab:hover{border-color:var(--blue-mid)}
 .stab.on{border-color:var(--blue-mid); background:var(--blue-soft)}
 .stab.on b{color:var(--blue)}
@@ -861,4 +864,53 @@ body.has-hero .statsbtn:hover{background:rgba(255,255,255,.22); color:#fff}
   .sec-desc{order:1} .sec-own{order:2} .sec-tags{order:3}
   .sec-rel{order:4} .sec-notes{order:5} .sec-switch{order:6}
 }
-.dbody + .slug{margin-top:22px}
+
+/* ---------- toolbar (search + Filters), sticky ---------- */
+/* Added 2026-11-10. Search and the Filters button stay pinned to the top of
+   the window as the list scrolls, so neither is ever a long scroll away. The
+   filter row itself is NOT pinned - it opens in the page under the toolbar,
+   because a pinned row of dropdowns, each opening a tall panel, would cover
+   most of a phone screen. `.stuck` (set by app.js) is what gives the toolbar
+   its frosted background and shadow once it is actually pinned; at rest it
+   sits on the page like the old search bar. The negative margin carries that
+   background out to the window edges. */
+.stuck-mark{height:1px; margin-top:17px}
+body:has(#browse[hidden]) .toolbar, body:has(#browse[hidden]) .stuck-mark{display:none}
+.toolbar{
+  position:sticky; top:0; z-index:25; display:flex; gap:9px; align-items:stretch;
+  margin:0 -22px; padding:0 22px; transition:background .2s ease, box-shadow .2s ease, padding .2s ease;
+}
+.toolbar.stuck{
+  padding-top:10px; padding-bottom:10px; border-radius:0 0 16px 16px;
+  background:color-mix(in srgb, var(--ground) 84%, transparent);
+  -webkit-backdrop-filter:blur(12px) saturate(1.3); backdrop-filter:blur(12px) saturate(1.3);
+  box-shadow:0 1px 0 var(--line-2), 0 10px 24px -18px rgba(0,0,0,.45);
+}
+.filtbtn{
+  flex:none; display:inline-flex; align-items:center; gap:8px;
+  font-family:var(--ui); font-size:13.5px; font-weight:700; color:var(--ink-2);
+  border:1.5px solid var(--line-2); background:var(--panel); border-radius:11px;
+  padding:0 15px; cursor:pointer;
+}
+.filtbtn:hover{border-color:var(--blue-mid); color:var(--blue)}
+.filtbtn.on{border-color:var(--blue-mid); background:var(--blue-soft); color:var(--blue)}
+.filtbtn .cnt{
+  font-size:11px; font-weight:700; line-height:1; background:var(--fill-blue); color:#fff;
+  border-radius:999px; padding:3px 7px; font-variant-numeric:tabular-nums;
+}
+.filtbtn .cnt[hidden]{display:none}
+@media (max-width:560px){
+  .toolbar{margin:0 -22px; gap:7px}
+  .filtbtn{padding:0 12px}
+  .filtbtn .ft{display:none}
+  .searchbar input{font-size:16px}
+}
+
+/* ---------- cover morph between a tile and its game page ---------- */
+/* app.js gives the clicked tile's image and the game page's cover the same
+   name, and the browser animates one into the other. The rest of the page
+   cross-fades. Both pictures are shown cropped-to-fill while they move, so a
+   2:3 grid tile and a landscape cover meet in the middle without stretching. */
+::view-transition-group(gl-cover){animation-duration:.36s; animation-timing-function:cubic-bezier(.2,.75,.2,1)}
+::view-transition-old(gl-cover), ::view-transition-new(gl-cover){height:100%; width:100%; object-fit:cover; border-radius:12px; overflow:hidden}
+::view-transition-old(root), ::view-transition-new(root){animation-duration:.22s}
