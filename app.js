@@ -862,6 +862,21 @@ function passes(g) {
    status lists. `Abandoned` is out because its date is when he stopped, and
    `In Progress` because Justin ruled it gets no shelf (and it carries no date
    anyway). */
+/* The whole shelves panel can be collapsed to one slim bar. One switch for
+   all of them, not one per shelf - Justin's call, 2026-11-10: with four
+   shelves the full list starts about two screens down, and on a day he only
+   wants to browse it he should not have to scroll past them every time. A
+   browser preference like list/grid, never URL state. Collapsed, the cards
+   are not built at all, so it also costs nothing to load. */
+const SHELVES_KEY = 'gl.shelves.hidden';
+function shelvesHiddenPref(v) {
+  try {
+    if (v === undefined) return localStorage.getItem(SHELVES_KEY) === '1';
+    localStorage.setItem(SHELVES_KEY, v ? '1' : '0');
+  } catch (e) { /* no storage: shelves show each visit */ }
+  return v;
+}
+let shelvesCollapsed = shelvesHiddenPref();
 const SHELF_SIZE = 14;
 const NOT_RECENTLY_PLAYED = ['Unplayed', 'Abandoned', 'In Progress'];
 /* One small picture per shelf, all in the site's neutral blue. Deliberately
@@ -937,12 +952,30 @@ function renderShelves() {
     .slice(0, SHELF_SIZE);
   const backlog = pick([...STARS]).reverse().slice(0, SHELF_SIZE);
 
-  [shelfNode('playing', 'Now playing', playing),
-   shelfNode('added', 'Recently added', added, '#/?sort=added:desc'),
-   shelfNode('played', 'Recently played', played, '#/played?sort=completed:desc'),
-   shelfNode('backlog', 'Priority backlog', backlog, '#/?status=backlog')
-  ].forEach(n => { if (n) box.appendChild(n); });
-  if (!box.childNodes.length) box.hidden = true;
+  /* [kind, title, games, see-all link]. Empty shelves drop out here, before
+     anything is built, so the bar below can name exactly what is on offer. */
+  const shelves = [
+    ['playing', 'Now playing', playing],
+    ['added', 'Recently added', added, '#/?sort=added:desc'],
+    ['played', 'Recently played', played, '#/played?sort=completed:desc'],
+    ['backlog', 'Priority backlog', backlog, '#/?status=backlog']
+  ].filter(s => s[2].length);
+  if (!shelves.length) { box.hidden = true; return; }
+
+  /* The bar: always there, so a collapsed panel still says what it is and
+     how to bring it back. Collapsed, it also lists the shelf names. */
+  const bar = el('div', 'shelves-bar');
+  bar.appendChild(el('span', 'sb-title', 'Shelves'));
+  if (shelvesCollapsed) bar.appendChild(el('span', 'sb-names', shelves.map(s => s[1]).join(' · ')));
+  const tog = el('button', 'sb-toggle', shelvesCollapsed ? 'Show' : 'Hide');
+  tog.type = 'button';
+  tog.setAttribute('aria-expanded', String(!shelvesCollapsed));
+  tog.appendChild(el('span', 'chev', shelvesCollapsed ? '▾' : '▴'));
+  tog.onclick = () => { shelvesCollapsed = shelvesHiddenPref(!shelvesCollapsed); renderShelves(); };
+  bar.appendChild(tog);
+  box.appendChild(bar);
+  box.classList.toggle('collapsed', shelvesCollapsed);
+  if (!shelvesCollapsed) shelves.forEach(s => box.appendChild(shelfNode(...s)));
   /* "All games" only makes sense as the heading under a set of shelves. */
   $('#allhead').hidden = box.hidden;
 }
